@@ -11,29 +11,29 @@
         position: fixed;
         z-index: 5;
         left: 50%;
-        bottom: max(12px, env(safe-area-inset-bottom));
+        bottom: max(10px, env(safe-area-inset-bottom));
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 7px;
-        width: min(460px, calc(100vw - 20px));
-        padding: 8px;
+        gap: 5px;
+        width: min(390px, calc(100vw - 24px));
+        padding: 5px;
         transform: translateX(-50%);
         border: 1px solid rgba(38, 66, 38, 0.2);
         border-radius: 18px;
-        background: rgba(248, 253, 245, 0.94);
-        box-shadow: 0 8px 28px rgba(23, 45, 23, 0.24);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
+        background: rgba(248, 253, 245, 0.62);
+        box-shadow: 0 6px 22px rgba(23, 45, 23, 0.18);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
       }
       .tool-button {
         min-width: 0;
-        min-height: 50px;
-        padding: 0 8px;
+        min-height: 38px;
+        padding: 0 6px;
         border: 1px solid rgba(47, 68, 48, 0.14);
         border-radius: 12px;
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(255, 255, 255, 0.48);
         color: #344636;
-        font: 600 13px/1.2 system-ui, sans-serif;
+        font: 600 12px/1.2 system-ui, sans-serif;
         white-space: nowrap;
         -webkit-tap-highlight-color: transparent;
         touch-action: manipulation;
@@ -52,8 +52,8 @@
         outline-offset: 2px;
       }
       @media (max-width: 370px) {
-        #tool-toolbar { gap: 4px; padding: 6px; }
-        .tool-button { min-height: 46px; padding-inline: 3px; font-size: 11px; }
+        #tool-toolbar { gap: 3px; padding: 4px; }
+        .tool-button { min-height: 34px; padding-inline: 3px; font-size: 10px; }
       }
     </style>
   </head>

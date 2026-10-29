@@ -2,6 +2,7 @@ import {
   AmbientLight,
   BoxGeometry,
   Color,
+  ConeGeometry,
   DoubleSide,
   DirectionalLight,
   GridHelper,
@@ -21,13 +22,14 @@ import {
   TextureLoader,
   Vector2,
   Vector3,
+  CylinderGeometry,
 } from 'three'
 import './styles/main.css'
 import { Renderer } from './engine/renderer'
 
-const MAP_SIZE = 100
+const MAP_SIZE = 72
 const CELL_SIZE = 2
-const CAMERA_VIEW_HEIGHT = 72
+const CAMERA_VIEW_HEIGHT = 56
 const PAN_SENSITIVITY = 1
 const MIN_ZOOM = 0.6
 const MAX_ZOOM = 2.5
@@ -69,36 +71,37 @@ for (const material of gridMaterials) {
 }
 scene.add(grid)
 
-const ambient = new AmbientLight('#ffffff', 0.6)
+const ambient = new AmbientLight('#d9e8ff', 0.38)
 scene.add(ambient)
 
-const sun = new DirectionalLight('#fff7e7', 1.5)
+const sun = new DirectionalLight('#fff4d6', 2.8)
 sun.name = 'city-sun'
-sun.position.set(42, 58, 36)
+sun.position.set(34, 68, 30)
 sun.target.position.set(0, 0, 0)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
-sun.shadow.camera.left = -62
-sun.shadow.camera.right = 62
-sun.shadow.camera.top = 62
-sun.shadow.camera.bottom = -62
+sun.shadow.camera.left = -52
+sun.shadow.camera.right = 52
+sun.shadow.camera.top = 52
+sun.shadow.camera.bottom = -52
 sun.shadow.camera.near = 1
 sun.shadow.camera.far = 180
 sun.shadow.camera.updateProjectionMatrix()
 sun.shadow.bias = -0.00025
 sun.shadow.normalBias = 0.025
-sun.shadow.radius = 3
+sun.shadow.radius = 5
 scene.add(sun, sun.target)
 
 const buildingTypes = {
-  HOUSE: { asset: 'house.png', height: 4.8 },
-  SHOP: { asset: 'shop.png', height: 4.8 },
-  SKYSCRAPER: { asset: 'skyscraper.png', height: 6.8 },
+  HOUSE: { asset: 'house.png', height: 6.2 },
+  SHOP: { asset: 'shop.png', height: 6.2 },
+  SKYSCRAPER: { asset: 'skyscraper.png', height: 8.8 },
 }
 const buildingTextures = Object.create(null)
 const buildingMaterials = Object.create(null)
 const buildingGeometries = Object.create(null)
 let spritesReady = false
+let cityGenerated = false
 const textureLoader = new TextureLoader()
 
 const spriteLoadPromise = Promise.all(Object.entries(buildingTypes).map(([type, definition]) => new Promise((resolve, reject) => {
@@ -120,6 +123,10 @@ const spriteLoadPromise = Promise.all(Object.entries(buildingTypes).map(([type, 
   }, undefined, reject)
 }))).then(() => {
   spritesReady = true
+  if (!cityGenerated) {
+    cityGenerated = true
+    populateCityBlocks()
+  }
   updateToolbar()
 }).catch(error => {
   console.error('Building sprite loading failed:', error)
@@ -144,8 +151,8 @@ function createBuilding(type = 'HOUSE') {
   const building = new Mesh(geometry, buildingMaterials[type])
   building.name = `sprite-building-${type.toLowerCase()}`
   building.rotation.y = Math.PI / 4
-  building.castShadow = false
-  building.receiveShadow = false
+  building.castShadow = true
+  building.receiveShadow = true
   building.userData.type = type
   return building
 }
@@ -201,6 +208,8 @@ function createRoadTile() {
 const roadTiles = new Map()
 const roads = []
 const buildings = []
+const trees = []
+const cars = []
 const cellKey = (x, z) => {
   const column = Math.round((x - FIRST_CELL_CENTER) / CELL_SIZE)
   const row = Math.round((z - FIRST_CELL_CENTER) / CELL_SIZE)
@@ -257,9 +266,88 @@ const world = {
   },
 }
 
+const trunkMaterial = new MeshStandardMaterial({ color: '#714a31', roughness: 1 })
+const leafMaterials = [
+  new MeshStandardMaterial({ color: '#2d7b45', roughness: 1 }),
+  new MeshStandardMaterial({ color: '#3f9450', roughness: 1 }),
+  new MeshStandardMaterial({ color: '#1f6840', roughness: 1 }),
+]
+
+function createTree(x, z, scale = 1) {
+  const tree = new Group()
+  tree.name = 'procedural-sidewalk-tree'
+  tree.position.set(x, 0, z)
+  const trunk = new Mesh(new CylinderGeometry(0.11 * scale, 0.16 * scale, 0.7 * scale, 7), trunkMaterial)
+  trunk.position.y = 0.35 * scale
+  trunk.castShadow = true
+  const crown = new Mesh(new ConeGeometry(0.65 * scale, 1.55 * scale, 8), leafMaterials[trees.length % leafMaterials.length])
+  crown.position.y = 1.35 * scale
+  crown.castShadow = true
+  crown.receiveShadow = true
+  tree.add(trunk, crown)
+  scene.add(tree)
+  trees.push(tree)
+  return tree
+}
+
+function createCar(x, z, color, direction = 1) {
+  const car = new Group()
+  car.name = 'procedural-moving-car'
+  car.position.set(x, 0.16, z)
+  car.userData.direction = direction
+  car.userData.origin = x
+  const body = new Mesh(new BoxGeometry(0.72, 0.22, 0.38), new MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.05 }))
+  body.castShadow = true
+  const cabin = new Mesh(new BoxGeometry(0.32, 0.16, 0.3), new MeshStandardMaterial({ color: '#dce9e6', roughness: 0.35, metalness: 0.1 }))
+  cabin.position.set(-0.04, 0.18, 0)
+  cabin.castShadow = true
+  car.add(body, cabin)
+  scene.add(car)
+  cars.push(car)
+  return car
+}
+
+function populateCityBlocks() {
+  const cellCount = Math.round(MAP_SIZE / CELL_SIZE)
+  const roadBand = 2
+  const blockSpan = 6
+  for (let column = 0; column < cellCount; column += 1) {
+    for (let row = 0; row < cellCount; row += 1) {
+      const x = FIRST_CELL_CENTER + column * CELL_SIZE
+      const z = FIRST_CELL_CENTER + row * CELL_SIZE
+      if (column % blockSpan < roadBand || row % blockSpan < roadBand) world.addRoad(x, z)
+    }
+  }
+  for (let blockX = 0; blockX < cellCount; blockX += blockSpan) {
+    for (let blockZ = 0; blockZ < cellCount; blockZ += blockSpan) {
+      if (blockX + blockSpan >= cellCount || blockZ + blockSpan >= cellCount) continue
+      const lots = [[2, 2], [3, 2], [2, 3], [3, 3]]
+      lots.forEach(([dx, dz], lotIndex) => {
+        const x = FIRST_CELL_CENTER + (blockX + dx) * CELL_SIZE
+        const z = FIRST_CELL_CENTER + (blockZ + dz) * CELL_SIZE
+        const type = lotIndex === 0 && (blockX + blockZ) % 3 === 0
+          ? 'SKYSCRAPER'
+          : lotIndex === 3 ? 'SHOP' : 'HOUSE'
+        const building = createBuilding(type)
+        if (!building) return
+        building.position.set(x, 0, z)
+        building.userData.cell = { x, z }
+        scene.add(building)
+        buildings.push(building)
+      })
+      createTree(FIRST_CELL_CENTER + (blockX + 1) * CELL_SIZE, FIRST_CELL_CENTER + (blockZ + 1) * CELL_SIZE, 0.9)
+      createTree(FIRST_CELL_CENTER + (blockX + 4) * CELL_SIZE, FIRST_CELL_CENTER + (blockZ + 4) * CELL_SIZE, 1.05)
+    }
+  }
+  createCar(-24, -1, '#d9544d', 1)
+  createCar(18, 1, '#4b83bd', -1)
+  createCar(-2, 24, '#e8a33b', 1)
+}
+
 const cameraTarget = new Vector3(0, 0, 0)
 const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 300)
-camera.position.set(50, 50, 50)
+camera.position.set(44, 44, 44)
+camera.zoom = 1.18
 camera.lookAt(cameraTarget)
 const cameraDirection = new Vector3()
 const cameraRight = new Vector3()
@@ -567,6 +655,14 @@ function sortBuildingSprites() {
 function animate() {
   resizeCamera()
   updateCameraInertia()
+  const time = performance.now() * 0.00035
+  cars.forEach((car, index) => {
+    if (index === 2) {
+      car.position.z = 24 + Math.sin(time * 0.7) * 10
+    } else {
+      car.position.x = car.userData.origin + Math.sin(time * 1.5 + index) * 13 * car.userData.direction
+    }
+  })
   sortBuildingSprites()
   renderer.render(scene, camera)
   requestAnimationFrame(animate)
