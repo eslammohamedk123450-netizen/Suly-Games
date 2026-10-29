@@ -59,9 +59,9 @@ renderer.gl.shadowMap.type = PCFSoftShadowMap
 renderer.gl.outputColorSpace = SRGBColorSpace
 
 const scene = new Scene()
-scene.background = new Color('#d8d2c5')
+scene.background = new Color('#78a964')
 
-const concreteMaterial = new MeshStandardMaterial({ color: '#c7c3b9', roughness: 0.95, metalness: 0 })
+const concreteMaterial = new MeshStandardMaterial({ color: '#78a964', roughness: 0.95, metalness: 0 })
 const concreteTileGeometry = new PlaneGeometry(CELL_SIZE, CELL_SIZE)
 const ground = new Mesh(new PlaneGeometry(MAP_SIZE, MAP_SIZE), concreteMaterial)
 ground.name = 'city-concrete-ground'
@@ -69,7 +69,7 @@ ground.rotation.x = -Math.PI / 2
 ground.receiveShadow = true
 scene.add(ground)
 
-const grid = new GridHelper(MAP_SIZE, MATRIX_COLS, '#aaa69c', '#b8b3a9')
+const grid = new GridHelper(MAP_SIZE, MATRIX_COLS, '#507d4d', '#6f9c61')
 grid.name = 'subtle-sidewalk-grid'
 grid.position.y = 0.025
 const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material]
@@ -77,7 +77,7 @@ for (const material of gridMaterials) {
   material.transparent = true
   material.opacity = 0.25
   material.depthWrite = false
-  material.color.set('#aaa69c')
+  material.color.set('#507d4d')
 }
 scene.add(grid)
 
@@ -85,7 +85,7 @@ const ambient = new AmbientLight('#e1ded5', 0.52)
 scene.add(ambient)
 const sun = new DirectionalLight('#fff1d5', 3.5)
 sun.name = 'city-sun'
-sun.position.set(34, 62, 30)
+sun.position.set(48, 56, 32)
 sun.target.position.set(0, 0, 0)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
@@ -97,7 +97,7 @@ sun.shadow.camera.near = 1
 sun.shadow.camera.far = 160
 sun.shadow.bias = -0.0002
 sun.shadow.normalBias = 0.018
-sun.shadow.radius = 2.2
+sun.shadow.radius = 4.4
 sun.shadow.camera.updateProjectionMatrix()
 scene.add(sun, sun.target)
 
@@ -130,7 +130,8 @@ const spriteLoadPromise = Promise.all(Object.entries(buildingTypes).map(([type, 
       alphaTest: 0.5,
       side: DoubleSide,
       roughness: 0.9,
-      depthWrite: false,
+      depthTest: true,
+      depthWrite: true,
     })
     resolve(texture)
   }, undefined, reject)
@@ -147,7 +148,7 @@ const spriteLoadPromise = Promise.all(Object.entries(buildingTypes).map(([type, 
 })
 
 const asphaltMaterial = new MeshStandardMaterial({ color: '#3e4244', roughness: 0.92, metalness: 0 })
-const sidewalkMaterial = new MeshStandardMaterial({ color: '#aaa79f', roughness: 0.94, metalness: 0 })
+const sidewalkMaterial = new MeshStandardMaterial({ color: '#b8b5ab', roughness: 0.94, metalness: 0 })
 const laneMaterial = new MeshStandardMaterial({ color: '#f3e7bf', roughness: 0.8 })
 const crosswalkMaterial = new MeshStandardMaterial({ color: '#fff8df', roughness: 0.78 })
 const asphaltGeometry = new PlaneGeometry(CELL_SIZE, CELL_SIZE)
@@ -266,13 +267,15 @@ function createSpriteBuilding(type) {
   const building = new Mesh(geometry, buildingMaterials[type])
   building.name = `sprite-building-${type.toLowerCase()}`
   building.rotation.y = Math.PI / 4
+  building.scale.setScalar(1.5)
+  building.position.y = 0
   building.castShadow = true
   building.receiveShadow = true
   building.userData.type = type
   return building
 }
 
-const parkMaterial = new MeshStandardMaterial({ color: '#789b70', roughness: 1, metalness: 0 })
+const parkMaterial = new MeshStandardMaterial({ color: '#4f8050', roughness: 1, metalness: 0 })
 const parkTileGeometry = new PlaneGeometry(CELL_SIZE * 0.86, CELL_SIZE * 0.86)
 const treeTrunkMaterial = new MeshStandardMaterial({ color: '#704a30', roughness: 1 })
 const treeLeafMaterials = [
@@ -343,7 +346,7 @@ function generateMatrixCity() {
 const cameraTarget = new Vector3(0, 0, 0)
 const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 300)
 camera.position.set(43, 43, 43)
-camera.zoom = 0.92
+camera.zoom = 1.08
 camera.lookAt(cameraTarget)
 const cameraDirection = new Vector3()
 const cameraRight = new Vector3()
@@ -551,8 +554,13 @@ function sortBuildingSprites() {
   camera.updateMatrixWorld(true)
   buildings.map(building => {
     const projected = new Vector3(building.position.x, building.position.y, building.position.z).project(camera)
-    return { building, screenY: (1 - projected.y) * 0.5, depth: building.position.z + building.position.x }
-  }).sort((a, b) => a.screenY - b.screenY || a.depth - b.depth).forEach(({ building }, index) => {
+    return {
+      building,
+      screenY: (1 - projected.y) * 0.5,
+      cameraDistance: building.position.distanceTo(camera.position),
+    }
+  }).sort((a, b) => a.screenY - b.screenY || b.cameraDistance - a.cameraDistance).forEach(({ building }, index) => {
+    // A larger screenY means lower on the screen; later renderOrder draws in front.
     building.renderOrder = 20 + index
   })
 }
