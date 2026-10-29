@@ -28,16 +28,16 @@ import './styles/main.css'
 import { Renderer } from './engine/renderer'
 
 const CITY_MATRIX = [
-  [2, 0, 2, 0, 0, 3, 0, 0, 4, 0],
-  [0, 5, 0, 0, 1, 1, 1, 0, 0, 2],
-  [2, 0, 0, 0, 1, 4, 1, 0, 0, 0],
-  [0, 0, 2, 0, 1, 1, 1, 0, 3, 0],
+  [2, 0, 3, 0, 0, 1, 1, 4, 0, 2],
+  [0, 0, 0, 5, 0, 1, 1, 0, 0, 0],
+  [3, 0, 0, 0, 0, 1, 1, 0, 4, 0],
+  [0, 0, 2, 0, 0, 1, 1, 0, 0, 3],
+  [0, 5, 0, 0, 0, 1, 1, 0, 0, 0],
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [0, 0, 3, 0, 1, 1, 1, 0, 0, 2],
-  [2, 0, 0, 0, 1, 4, 1, 0, 5, 0],
-  [0, 5, 0, 0, 1, 1, 1, 0, 0, 0],
-  [3, 0, 0, 0, 0, 2, 0, 0, 2, 0],
-  [0, 0, 2, 0, 0, 0, 0, 3, 0, 0],
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+  [0, 0, 4, 0, 3, 1, 1, 0, 2, 0],
+  [2, 0, 0, 5, 0, 1, 1, 0, 0, 4],
+  [0, 3, 0, 0, 0, 1, 1, 0, 0, 0],
 ]
 const MATRIX_ROWS = CITY_MATRIX.length
 const MATRIX_COLS = CITY_MATRIX[0].length
@@ -59,9 +59,9 @@ renderer.gl.shadowMap.type = PCFSoftShadowMap
 renderer.gl.outputColorSpace = SRGBColorSpace
 
 const scene = new Scene()
-scene.background = new Color('#78a964')
+scene.background = new Color('#d8d2c5')
 
-const concreteMaterial = new MeshStandardMaterial({ color: '#78a964', roughness: 0.95, metalness: 0 })
+const concreteMaterial = new MeshStandardMaterial({ color: '#c7c3b9', roughness: 0.95, metalness: 0 })
 const concreteTileGeometry = new PlaneGeometry(CELL_SIZE, CELL_SIZE)
 const ground = new Mesh(new PlaneGeometry(MAP_SIZE, MAP_SIZE), concreteMaterial)
 ground.name = 'city-concrete-ground'
@@ -69,7 +69,7 @@ ground.rotation.x = -Math.PI / 2
 ground.receiveShadow = true
 scene.add(ground)
 
-const grid = new GridHelper(MAP_SIZE, MATRIX_COLS, '#507d4d', '#6f9c61')
+const grid = new GridHelper(MAP_SIZE, MATRIX_COLS, '#aaa69c', '#b8b3a9')
 grid.name = 'subtle-sidewalk-grid'
 grid.position.y = 0.025
 const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material]
@@ -77,7 +77,7 @@ for (const material of gridMaterials) {
   material.transparent = true
   material.opacity = 0.25
   material.depthWrite = false
-  material.color.set('#507d4d')
+  material.color.set('#aaa69c')
 }
 scene.add(grid)
 
@@ -95,7 +95,7 @@ sun.shadow.camera.top = 42
 sun.shadow.camera.bottom = -42
 sun.shadow.camera.near = 1
 sun.shadow.camera.far = 160
-sun.shadow.bias = -0.0002
+sun.shadow.bias = -0.0005
 sun.shadow.normalBias = 0.018
 sun.shadow.radius = 4.4
 sun.shadow.camera.updateProjectionMatrix()
@@ -129,9 +129,6 @@ const spriteLoadPromise = Promise.all(Object.entries(buildingTypes).map(([type, 
       transparent: true,
       alphaTest: 0.5,
       side: DoubleSide,
-      roughness: 0.9,
-      depthTest: true,
-      depthWrite: true,
     })
     resolve(texture)
   }, undefined, reject)
@@ -267,10 +264,10 @@ function createSpriteBuilding(type) {
   const building = new Mesh(geometry, buildingMaterials[type])
   building.name = `sprite-building-${type.toLowerCase()}`
   building.rotation.y = Math.PI / 4
-  building.scale.setScalar(1.5)
+  building.scale.setScalar(1.2)
   building.position.y = 0
   building.castShadow = true
-  building.receiveShadow = true
+  building.receiveShadow = false
   building.userData.type = type
   return building
 }
@@ -307,7 +304,7 @@ function createPark(row, col) {
 function createCar(color, startColumn, direction) {
   const car = new Group()
   car.name = 'matrix-road-car'
-  car.position.set(worldPosition(4, startColumn).x, 0.16, worldPosition(4, startColumn).z)
+  car.position.set(worldPosition(5, startColumn).x, 0.16, worldPosition(5, startColumn).z)
   car.userData.startColumn = startColumn
   car.userData.direction = direction
   const body = new Mesh(new BoxGeometry(1.15, 0.28, 0.62), new MeshStandardMaterial({ color, roughness: 0.72, metalness: 0.05 }))
@@ -345,8 +342,8 @@ function generateMatrixCity() {
 
 const cameraTarget = new Vector3(0, 0, 0)
 const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 300)
-camera.position.set(43, 43, 43)
-camera.zoom = 1.08
+camera.position.set(48, 48, 48)
+camera.zoom = 0.96
 camera.lookAt(cameraTarget)
 const cameraDirection = new Vector3()
 const cameraRight = new Vector3()
@@ -568,9 +565,9 @@ function animate() {
   resizeCamera()
   updateCameraInertia()
   const time = performance.now() * 0.00045
-  const roadZ = worldPosition(4, 0).z
+  const roadZ = worldPosition(5, 0).z
   cars.forEach((car, index) => {
-    const baseX = worldPosition(4, index === 0 ? 1 : 8).x
+    const baseX = worldPosition(5, index === 0 ? 1 : 8).x
     car.position.x = baseX + Math.sin(time * 1.15 + index * Math.PI) * CELL_SIZE * 3.2 * car.userData.direction
     car.position.z = roadZ
   })
