@@ -1,0 +1,40 @@
+# TODO — Suly City
+
+## تأسيس العرض والأداء على الهاتف
+- [x] «Set up a WebGLRenderer with `antialias: true` and `powerPreference: "high-performance"`.»
+- [x] «Set the pixel ratio to `Math.min(window.devicePixelRatio, 2)` for mobile performance.»
+- [x] «Enable Shadow Maps: `renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;`»
+- [x] «The goal is to optimize for mobile APK size and performance from day one.» — أزيلت ملفات الخطوط غير المستخدمة، وحجم JavaScript المضغوط في بناء الويب نحو 136.70 KB؛ لا يتضمن هذا التسليم تغليف APK أصليًا.
+
+## الكاميرا الإيزومترية والتحريك
+- [x] «Use `THREE.OrthographicCamera` (NOT `PerspectiveCamera`).»
+- [x] «Position it at a perfect isometric angle (e.g., X: 50, Y: 50, Z: 50) looking at the center (0,0,0).»
+- [x] «Add basic mouse/touch drag controls to pan the camera around the map.»
+
+## الأرض والإضاءة والظلال
+- [x] «Add a `THREE.AmbientLight` to brighten the scene (intensity ~0.6).»
+- [x] «Add a `THREE.DirectionalLight` (intensity ~1.5) positioned high up. Enable `castShadow = true`.»
+- [x] «Configure the DirectionalLight's shadow camera properties (left, right, top, bottom, near, far) properly so shadows are crisp and scale well with the buildings.»
+- [x] «Create a large `THREE.PlaneGeometry` for the ground (e.g., 100x100).»
+- [x] «Rotate it flat (`-Math.PI / 2` on X-axis).»
+- [x] «Use a standard material with a grass-green color and set `receiveShadow = true`.»
+- [x] «Add a `THREE.GridHelper` so we can visually see the grid cells (we will hide it later).» — حجم الخلية 2×2 ويتوافق مع قاعدة المبنى.
+
+## المبنى الأول ووضعه بالنقر/اللمس
+- [x] «Implement a `createBuilding()` function. Do NOT use external images or textures. Use only Three.js primitives (e.g., `BoxGeometry` for the base and `ConeGeometry` for the roof). Give them solid colors.»
+- [x] «Ensure all meshes inside the building have `castShadow = true` and `receiveShadow = true`.»
+- [x] «Implement a `THREE.Raycaster`. When the user taps/clicks on the ground plane, instantiate the building and place it at the clicked coordinates.» — يلتقط النقرة ويُحاذي المبنى إلى مركز أقرب خلية.
+- [x] «Pivot Point & Grounding (Y=0): When generating the building, ensure the pivot point is at the absolute bottom center. The building group must be placed at `Y = 0` relative to the ground so it sits perfectly on the grid and does NOT float or sink into the ground.»
+- [x] «Shadow Optimization: Ensure the building casts a soft shadow onto the ground to create the 2.5D depth effect.»
+
+## نطاق الأصول والواجهة
+- [x] «For this first step, I ONLY want the foundational environment: The Map and the ability to place the first building. Do NOT add any game logic, complex UI, or menus yet.»
+- [x] «No External Assets: Keep it 100% procedural (generated via code) to keep the bundle size extremely small and avoid loading issues.» — عناصر اللعب هندسية برمجية؛ أيقونة المشاركة رسم هندسي برمجي مستقل عن المشهد.
+- [x] «The shape of the buildings can be developed later; keep the first building simple and procedural for now.»
+- [x] «Output the complete, clean, runnable HTML and JS code.» — مدمج في مشروع Three.js/TypeScript/Vite القائم وقابل للتشغيل والبناء.
+
+## التحقق
+- [x] `pnpm build` نجح؛ الحجم المضغوط لملفات JavaScript/CSS نحو 136.70 KB، ولا تُحمّل خطوط.
+- [x] `pnpm test` نجح: 78 اختبارًا.
+- [x] `pnpm smoke` نجح على سطح المكتب والهاتف: الكاميرا، الأرض، الظلال، المحاذاة، السحب واللمس.
+- [x] تحقّق رابط favicon وملف PNG والوصف العربي في مخرجات المشاركة.
