@@ -6,9 +6,36 @@
     <meta name="theme-color" content="#b9d9ad" />
     <title>Suly City</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <style>
+      #mode-toggle {
+        position: fixed;
+        z-index: 5;
+        inset-block-start: max(12px, env(safe-area-inset-top));
+        inset-inline-start: max(12px, env(safe-area-inset-right));
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid rgba(34, 67, 38, 0.24);
+        border-radius: 999px;
+        background: rgba(250, 255, 247, 0.94);
+        color: #27472a;
+        box-shadow: 0 3px 12px rgba(26, 54, 25, 0.2);
+        font: 600 14px/1.2 system-ui, sans-serif;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+      }
+      #mode-toggle[data-mode="building"] {
+        background: rgba(255, 248, 235, 0.96);
+        color: #5d3828;
+      }
+      #mode-toggle:focus-visible {
+        outline: 3px solid #356b3b;
+        outline-offset: 3px;
+      }
+    </style>
   </head>
   <body>
-    <canvas id="game"></canvas>
-    <script type="module" src="/src/main.ts"></script>
+    <canvas id="game" aria-label="Suly City isometric city builder"></canvas>
+    <button id="mode-toggle" type="button" aria-pressed="false">وضع الطريق · R</button>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

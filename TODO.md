@@ -38,3 +38,14 @@
 - [x] `pnpm test` نجح: 78 اختبارًا.
 - [x] `pnpm smoke` نجح على سطح المكتب والهاتف: الكاميرا، الأرض، الظلال، المحاذاة، السحب واللمس.
 - [x] تحقّق رابط favicon وملف PNG والوصف العربي في مخرجات المشاركة.
+
+## نظام الطرق والقيود والتحكم بالهاتف
+- [x] «Create a `createRoadTile()` function. Use a flat grey `PlaneGeometry` for the asphalt, and small white `BoxGeometry` or `PlaneGeometry` strips for dashed lines. Set it slightly above the ground (Y = 0.01) to prevent Z-fighting.» — إنشاء إجرائي مع خطوط بيضاء وظلال استقبال مناسبة.
+- [x] «When the user taps the ground, calculate the exact center of the grid cell tapped (using Raycaster and Math.round on the X and Z coordinates).» — يطابق المركز على شبكة 2×2 ويقيّده ضمن الخريطة.
+- [x] «Implement a simple toggle mechanism (e.g., a variable `currentMode = 'ROAD'` or `'BUILDING'`, or toggled via a key press for now) so the user can switch between placing roads and placing buildings.» — زر لمسي ومفتاحا R/B؛ يبدأ اللعب بوضع الطريق.
+- [x] «A building can ONLY be placed on a grid cell if it is adjacent (shares an edge: North, South, East, or West) to an existing Road tile. If the player taps an empty cell with no adjacent roads, prevent the building from being placed.» — التحقق يقتصر على الجيران الأربعة ويمنع وضع المبنى فوق خلية مشغولة.
+- [x] «One-finger drag: Pan the camera smoothly with inertia/damping (glides slightly after the finger lifts).» — قصور مخمّد، مع حدود هدف الكاميرا ضمن أرضية الخريطة.
+- [x] «Pinch-to-zoom: Adjust the `OrthographicCamera.zoom` property. Ensure you call `camera.updateProjectionMatrix()` after zooming.» — تكبير قرصي على الهاتف وعجلة فأرة على الكمبيوتر.
+- [x] «Clamp the camera bounds so the user cannot pan outside the edges of the ground Plane.» — يقيّد موضع هدف الكاميرا بين مراكز الخلايا الطرفية.
+- [x] «Add a visual highlight (e.g., a translucent green or red square mesh) that follows the user's finger/cursor over the grid. It should be Green when placement is valid (e.g., empty cell, adjacent to road) and Red when placement is invalid.» — المربع يتحدث أثناء المؤشر واللمس بحسب الوضع والإشغال والتجاور.
+- [x] «Use specific named imports for Three.js (e.g., `import { Raycaster, Vector2, ... } from 'three';`); keep lighting and shadow maps configured exactly as they are (PCFSoftShadowMap); ensure all meshes cast and receive shadows correctly; use procedural primitive geometry only.» — لا أصول خارجية أو نماذج GLTF أو تبعيات جديدة.
