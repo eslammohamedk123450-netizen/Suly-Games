@@ -99,7 +99,7 @@ const buildingTypes = {
 }
 const buildingTextures = Object.create(null)
 const buildingMaterials = Object.create(null)
-const buildingGeometries = Object.create(null)
+const spriteGeometries = Object.create(null)
 let spritesReady = false
 let cityGenerated = false
 const textureLoader = new TextureLoader()
@@ -133,19 +133,19 @@ const spriteLoadPromise = Promise.all(Object.entries(buildingTypes).map(([type, 
   updateToolbar()
 })
 
-function createBuilding(type = 'HOUSE') {
+function createSpriteBuilding(type = 'HOUSE') {
   const definition = buildingTypes[type]
   const texture = buildingTextures[type]
   if (!definition || !texture) return null
 
-  let geometry = buildingGeometries[type]
+  let geometry = spriteGeometries[type]
   if (!geometry) {
     const height = definition.height
     const width = height * texture.image.width / texture.image.height
     geometry = new PlaneGeometry(width, height)
     geometry.translate(0, height / 2, 0)
     geometry.computeBoundingBox()
-    buildingGeometries[type] = geometry
+    spriteGeometries[type] = geometry
   }
 
   const building = new Mesh(geometry, buildingMaterials[type])
@@ -224,7 +224,7 @@ const world = {
   buildings,
   roads,
   roadTiles,
-  createBuilding,
+  createSpriteBuilding,
   createRoadTile,
   hasRoadAt(x, z) {
     return roadTiles.has(cellKey(x, z))
@@ -256,7 +256,7 @@ const world = {
   },
   addBuilding(x, z, type = 'HOUSE') {
     if (!this.canPlaceBuilding(x, z)) return null
-    const building = createBuilding(type)
+    const building = createSpriteBuilding(type)
     if (!building) return null
     building.position.set(x, 0, z)
     building.userData.cell = { x, z }
@@ -309,8 +309,8 @@ function createCar(x, z, color, direction = 1) {
 
 function populateCityBlocks() {
   const cellCount = Math.round(MAP_SIZE / CELL_SIZE)
-  const roadBand = 2
-  const blockSpan = 6
+  const roadBand = 1
+  const blockSpan = 8
   for (let column = 0; column < cellCount; column += 1) {
     for (let row = 0; row < cellCount; row += 1) {
       const x = FIRST_CELL_CENTER + column * CELL_SIZE
@@ -321,14 +321,18 @@ function populateCityBlocks() {
   for (let blockX = 0; blockX < cellCount; blockX += blockSpan) {
     for (let blockZ = 0; blockZ < cellCount; blockZ += blockSpan) {
       if (blockX + blockSpan >= cellCount || blockZ + blockSpan >= cellCount) continue
-      const lots = [[2, 2], [3, 2], [2, 3], [3, 3]]
+      const lots = [[2, 2], [5, 2], [2, 5], [5, 5]]
       lots.forEach(([dx, dz], lotIndex) => {
+        if (Math.random() >= 0.5) {
+          createTree(FIRST_CELL_CENTER + (blockX + dx) * CELL_SIZE, FIRST_CELL_CENTER + (blockZ + dz) * CELL_SIZE, 0.9)
+          return
+        }
         const x = FIRST_CELL_CENTER + (blockX + dx) * CELL_SIZE
         const z = FIRST_CELL_CENTER + (blockZ + dz) * CELL_SIZE
         const type = lotIndex === 0 && (blockX + blockZ) % 3 === 0
           ? 'SKYSCRAPER'
           : lotIndex === 3 ? 'SHOP' : 'HOUSE'
-        const building = createBuilding(type)
+        const building = createSpriteBuilding(type)
         if (!building) return
         building.position.set(x, 0, z)
         building.userData.cell = { x, z }
@@ -336,7 +340,7 @@ function populateCityBlocks() {
         buildings.push(building)
       })
       createTree(FIRST_CELL_CENTER + (blockX + 1) * CELL_SIZE, FIRST_CELL_CENTER + (blockZ + 1) * CELL_SIZE, 0.9)
-      createTree(FIRST_CELL_CENTER + (blockX + 4) * CELL_SIZE, FIRST_CELL_CENTER + (blockZ + 4) * CELL_SIZE, 1.05)
+      createTree(FIRST_CELL_CENTER + (blockX + 6) * CELL_SIZE, FIRST_CELL_CENTER + (blockZ + 6) * CELL_SIZE, 1.05)
     }
   }
   createCar(-24, -1, '#d9544d', 1)
@@ -673,7 +677,7 @@ window.__game = {
   world,
   camera,
   renderer,
-  createBuilding,
+  createSpriteBuilding,
   createRoadTile,
   get spritesReady() { return spritesReady },
   get selectedBuildingType() { return selectedBuildingType },

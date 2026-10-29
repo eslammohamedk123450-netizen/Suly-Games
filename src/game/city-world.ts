@@ -66,48 +66,4 @@ export class CityWorld {
     this.sun.intensity = CONFIG.city.sunIntensity
   }
 
-  /** Build a primitive-only house whose group origin is its absolute bottom center. */
-  createBuilding(): THREE.Group {
-    const scale = 1
-    const group = new THREE.Group()
-    group.name = 'procedural-building'
-
-    const base = new THREE.Mesh(
-      new THREE.BoxGeometry(2 * scale, 2 * scale, 2 * scale),
-      new THREE.MeshStandardMaterial({ color: '#e8d5ad', roughness: 0.88 }),
-    )
-    base.position.y = scale
-    group.add(base)
-
-    const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(1.48 * scale, 1.82 * scale, 4),
-      new THREE.MeshStandardMaterial({ color: '#bd6448', roughness: 0.9 }),
-    )
-    roof.position.y = 2.91 * scale
-    roof.rotation.y = Math.PI / 4
-    group.add(roof)
-
-    const door = new THREE.Mesh(
-      new THREE.BoxGeometry(0.48 * scale, 0.9 * scale, 0.08 * scale),
-      new THREE.MeshStandardMaterial({ color: '#76513a', roughness: 1 }),
-    )
-    door.position.set(0, 0.45 * scale, 1.04 * scale)
-    group.add(door)
-
-    group.traverse(object => {
-      if ((object as THREE.Mesh).isMesh) {
-        object.castShadow = true
-        object.receiveShadow = true
-      }
-    })
-    return group
-  }
-
-  addBuilding(x: number, z: number): THREE.Group {
-    const building = this.createBuilding()
-    building.position.set(x, 0, z)
-    this.scene.add(building)
-    this.buildings.push(building)
-    return building
-  }
 }
