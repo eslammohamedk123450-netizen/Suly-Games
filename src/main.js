@@ -15,6 +15,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   OrthographicCamera,
+  PCFSoftShadowMap,
   PlaneGeometry,
   Raycaster,
   Scene,
@@ -26,89 +27,108 @@ import {
 import './styles/main.css'
 import { Renderer } from './engine/renderer'
 
-const CITY_MATRIX = [
-  [2, 0, 3, 0, 0, 1, 1, 4, 0, 2],
-  [0, 0, 0, 5, 0, 1, 1, 0, 0, 0],
-  [3, 0, 0, 0, 0, 1, 1, 0, 4, 0],
-  [0, 0, 2, 0, 0, 1, 1, 0, 0, 3],
-  [0, 5, 0, 0, 0, 1, 1, 0, 0, 0],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [0, 0, 4, 0, 3, 1, 1, 0, 2, 0],
-  [2, 0, 0, 5, 0, 1, 1, 0, 0, 4],
-  [0, 3, 0, 0, 0, 1, 1, 0, 0, 0],
-]
-const MATRIX_ROWS = CITY_MATRIX.length
-const MATRIX_COLS = CITY_MATRIX[0].length
+const GRID_SIZE = 20
 const CELL_SIZE = 4
-const MAP_SIZE = MATRIX_COLS * CELL_SIZE
+const MAP_SIZE = GRID_SIZE * CELL_SIZE
 const FIRST_CELL_CENTER = -MAP_SIZE / 2 + CELL_SIZE / 2
 const LAST_CELL_CENTER = MAP_SIZE / 2 - CELL_SIZE / 2
-const CAMERA_VIEW_HEIGHT = 54
-const MIN_ZOOM = 0.65
-const MAX_ZOOM = 2.2
+const CAMERA_VIEW_HEIGHT = 104
+const MIN_ZOOM = 0.56
+const MAX_ZOOM = 2.1
 const PAN_SENSITIVITY = 1
+
+function createCityMatrix() {
+  const matrix = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0))
+  const mainAvenueRows = new Set([9, 10])
+  const mainAvenueColumns = new Set([5, 6])
+  const sideStreetRows = new Set([2, 15])
+  const sideStreetColumns = new Set([2, 12, 17])
+
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      const isRoad = mainAvenueRows.has(row) || mainAvenueColumns.has(col) || sideStreetRows.has(row) || sideStreetColumns.has(col)
+      if (isRoad) {
+        matrix[row][col] = 1
+        continue
+      }
+
+      const blockRow = row < 2 ? 0 : row < 9 ? 1 : row < 15 ? 2 : 3
+      const blockColumn = col < 2 ? 0 : col < 5 ? 1 : col < 12 ? 2 : col < 17 ? 3 : 4
+      const blockSeed = blockRow * 11 + blockColumn * 7
+      const shouldBePark = (row + col + blockSeed) % 7 === 0 || (row === 17 && col >= 13 && col <= 16)
+      if (shouldBePark) matrix[row][col] = 5
+      else if ((row + col + blockSeed) % 2 === 1) matrix[row][col] = 0
+      else if ((row * 3 + col + blockSeed) % 11 === 0) matrix[row][col] = 4
+      else if ((row + col * 2 + blockSeed) % 5 === 0) matrix[row][col] = 3
+      else matrix[row][col] = 2
+    }
+  }
+  return matrix
+}
+
+const CITY_MATRIX = createCityMatrix()
+const MATRIX_ROWS = CITY_MATRIX.length
+const MATRIX_COLS = CITY_MATRIX[0].length
 
 const canvas = document.querySelector('#game')
 if (!(canvas instanceof HTMLCanvasElement)) throw new Error('Game canvas was not found')
+const bubbleLayer = document.querySelector('#building-bubbles')
 
 const renderer = new Renderer(canvas)
-renderer.gl.shadowMap.enabled = false
+renderer.gl.shadowMap.enabled = true
+renderer.gl.shadowMap.type = PCFSoftShadowMap
 renderer.gl.outputColorSpace = SRGBColorSpace
 
 const scene = new Scene()
 scene.background = new Color('#d8d2c5')
 
 const grassMaterial = new MeshStandardMaterial({ color: 0x7cb342, roughness: 0.95, metalness: 0 })
-const concreteTileGeometry = new PlaneGeometry(CELL_SIZE, CELL_SIZE)
 const ground = new Mesh(new PlaneGeometry(MAP_SIZE, MAP_SIZE), grassMaterial)
 ground.name = 'city-grass-ground'
 ground.rotation.x = -Math.PI / 2
+ground.receiveShadow = true
 scene.add(ground)
 
-const grid = new GridHelper(MAP_SIZE, MATRIX_COLS, '#aaa69c', '#b8b3a9')
-grid.name = 'subtle-sidewalk-grid'
+const grid = new GridHelper(MAP_SIZE, GRID_SIZE, '#9bbc72', '#aacb82')
+grid.name = 'subtle-grass-grid'
 grid.position.y = 0.025
 const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material]
 for (const material of gridMaterials) {
   material.transparent = true
-  material.opacity = 0.25
+  material.opacity = 0.1
   material.depthWrite = false
-  material.color.set('#aaa69c')
 }
 scene.add(grid)
-grid.visible = false
 
-const ambient = new AmbientLight('#e1ded5', 0.52)
+const ambient = new AmbientLight('#e1ded5', 0.58)
 scene.add(ambient)
 const sun = new DirectionalLight('#fff1d5', 3.5)
 sun.name = 'city-sun'
-sun.position.set(48, 56, 32)
+sun.position.set(52, 72, 40)
 sun.target.position.set(0, 0, 0)
-sun.castShadow = false
+sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
-sun.shadow.camera.left = -42
-sun.shadow.camera.right = 42
-sun.shadow.camera.top = 42
-sun.shadow.camera.bottom = -42
+sun.shadow.camera.left = -58
+sun.shadow.camera.right = 58
+sun.shadow.camera.top = 58
+sun.shadow.camera.bottom = -58
 sun.shadow.camera.near = 1
-sun.shadow.camera.far = 160
+sun.shadow.camera.far = 180
 sun.shadow.bias = -0.0005
-sun.shadow.normalBias = 0.018
-sun.shadow.radius = 4.4
+sun.shadow.normalBias = 0.02
+sun.shadow.radius = 3.5
 sun.shadow.camera.updateProjectionMatrix()
 scene.add(sun, sun.target)
 
 const buildingTypes = {
-  HOUSE: { asset: 'house.png', height: 4.7 },
-  SHOP: { asset: 'shop.png', height: 4.8 },
-  SKYSCRAPER: { asset: 'skyscraper.png', height: 6.9 },
+  HOUSE: { asset: 'house.png', height: 4.7, reward: 10 },
+  SHOP: { asset: 'shop.png', height: 4.8, reward: 15 },
+  SKYSCRAPER: { asset: 'skyscraper.png', height: 6.9, reward: 25 },
 }
 const buildingTextures = Object.create(null)
 const buildingMaterials = Object.create(null)
 const spriteGeometries = Object.create(null)
 const buildings = []
-const bubbleLayer = document.querySelector('#building-bubbles')
 const roads = []
 const parks = []
 const cars = []
@@ -147,7 +167,8 @@ const asphaltMaterial = new MeshStandardMaterial({ color: '#3e4244', roughness: 
 const sidewalkMaterial = new MeshStandardMaterial({ color: '#b8b5ab', roughness: 0.94, metalness: 0 })
 const laneMaterial = new MeshStandardMaterial({ color: '#f3e7bf', roughness: 0.8 })
 const crosswalkMaterial = new MeshStandardMaterial({ color: '#fff8df', roughness: 0.78 })
-const asphaltGeometry = new PlaneGeometry(CELL_SIZE, CELL_SIZE)
+const asphaltGeometry = new PlaneGeometry(CELL_SIZE - 0.28, CELL_SIZE - 0.28)
+const sidewalkGeometry = new PlaneGeometry(CELL_SIZE, CELL_SIZE)
 const curbHorizontalGeometry = new BoxGeometry(CELL_SIZE, 0.18, 0.24)
 const curbVerticalGeometry = new BoxGeometry(0.24, 0.18, CELL_SIZE)
 const laneDashGeometry = new BoxGeometry(0.5, 0.025, 0.09)
@@ -155,24 +176,18 @@ const crosswalkStripeGeometry = new BoxGeometry(0.18, 0.028, 0.72)
 const matrixCellKey = (row, col) => `${row}:${col}`
 const roadTiles = new Map()
 
-function matrixValue(row, col) {
-  return CITY_MATRIX[row]?.[col] ?? 0
-}
-function isMatrixRoad(row, col) {
-  return matrixValue(row, col) === 1
-}
+function matrixValue(row, col) { return CITY_MATRIX[row]?.[col] ?? 0 }
+function isMatrixRoad(row, col) { return matrixValue(row, col) === 1 }
 function worldPosition(row, col) {
-  return {
-    x: FIRST_CELL_CENTER + col * CELL_SIZE,
-    z: FIRST_CELL_CENTER + row * CELL_SIZE,
-  }
+  return { x: FIRST_CELL_CENTER + col * CELL_SIZE, z: FIRST_CELL_CENTER + row * CELL_SIZE }
 }
-function addConcreteTile(row, col) {
+function addGrassTile(row, col) {
   const { x, z } = worldPosition(row, col)
-  const tile = new Mesh(concreteTileGeometry, grassMaterial)
+  const tile = new Mesh(new PlaneGeometry(CELL_SIZE, CELL_SIZE), grassMaterial)
   tile.name = `grass-cell-${row}-${col}`
   tile.rotation.x = -Math.PI / 2
   tile.position.set(x, 0.012, z)
+  tile.receiveShadow = true
   scene.add(tile)
 }
 function createRoadTile(row, col) {
@@ -181,9 +196,15 @@ function createRoadTile(row, col) {
   const { x, z } = worldPosition(row, col)
   road.position.set(x, 0, z)
 
+  const sidewalk = new Mesh(sidewalkGeometry, sidewalkMaterial)
+  sidewalk.rotation.x = -Math.PI / 2
+  sidewalk.position.y = 0.035
+  sidewalk.receiveShadow = true
+  road.add(sidewalk)
+
   const asphalt = new Mesh(asphaltGeometry, asphaltMaterial)
   asphalt.rotation.x = -Math.PI / 2
-  asphalt.position.y = 0.035
+  asphalt.position.y = 0.065
   asphalt.receiveShadow = true
   road.add(asphalt)
 
@@ -222,12 +243,12 @@ function createRoadTile(row, col) {
   const vertical = neighbors.north || neighbors.south
   if (horizontal && !vertical) {
     const dash = new Mesh(laneDashGeometry, laneMaterial)
-    dash.position.set(0, 0.07, 0)
+    dash.position.set(0, 0.1, 0)
     road.add(dash)
   } else if (vertical && !horizontal) {
     const dash = new Mesh(laneDashGeometry, laneMaterial)
     dash.rotation.y = Math.PI / 2
-    dash.position.set(0, 0.07, 0)
+    dash.position.set(0, 0.1, 0)
     road.add(dash)
   }
 
@@ -235,8 +256,7 @@ function createRoadTile(row, col) {
   if (roadNeighborCount >= 3) {
     for (const offset of [-0.9, -0.54, -0.18, 0.18, 0.54, 0.9]) {
       const stripe = new Mesh(crosswalkStripeGeometry, crosswalkMaterial)
-      stripe.position.set(offset, 0.075, 0)
-      stripe.receiveShadow = true
+      stripe.position.set(offset, 0.105, 0)
       road.add(stripe)
     }
   }
@@ -246,36 +266,39 @@ function createRoadTile(row, col) {
   return road
 }
 
+function createBuildingBubble(type) {
+  if (!(bubbleLayer instanceof HTMLElement)) return null
+  const bubble = document.createElement('div')
+  bubble.className = 'building-bubble'
+  const label = `${type === 'HOUSE' ? 'House' : type === 'SHOP' ? 'Shop' : 'Skyscraper'} +${buildingTypes[type].reward}`
+  bubble.textContent = `+${buildingTypes[type].reward}`
+  bubble.title = label
+  bubble.setAttribute('aria-label', label)
+  bubbleLayer.appendChild(bubble)
+  return bubble
+}
 function createSpriteBuilding(type) {
   const definition = buildingTypes[type]
   const texture = buildingTextures[type]
   if (!definition || !texture) return null
   let geometry = spriteGeometries[type]
   if (!geometry) {
-    const height = definition.height
-    const width = height * texture.image.width / texture.image.height
-    geometry = new PlaneGeometry(width, height)
-    geometry.translate(0, height / 2, 0)
+    const width = definition.height * texture.image.width / texture.image.height
+    geometry = new PlaneGeometry(width, definition.height)
+    geometry.translate(0, definition.height / 2, 0)
     geometry.computeBoundingBox()
     spriteGeometries[type] = geometry
   }
   const building = new Mesh(geometry, buildingMaterials[type])
   building.name = `sprite-building-${type.toLowerCase()}`
   building.rotation.y = Math.PI / 4
-  building.scale.setScalar(1.2)
-  building.position.y = 0
+  building.scale.setScalar(1.5)
+  building.position.y = 0.01
+  building.castShadow = true
+  building.receiveShadow = false
   building.userData.type = type
   building.userData.bubble = createBuildingBubble(type)
   return building
-}
-
-function createBuildingBubble(type) {
-  if (!(bubbleLayer instanceof HTMLElement)) return null
-  const bubble = document.createElement('div')
-  bubble.className = 'building-bubble'
-  bubble.textContent = `${type === 'HOUSE' ? 'House' : type === 'SHOP' ? 'Shop' : 'Skyscraper'} +${type === 'HOUSE' ? 10 : type === 'SHOP' ? 15 : 25}`
-  bubbleLayer.appendChild(bubble)
-  return bubble
 }
 
 const parkMaterial = new MeshStandardMaterial({ color: '#4f8050', roughness: 1, metalness: 0 })
@@ -306,11 +329,11 @@ function createPark(row, col) {
   scene.add(park)
   parks.push(park)
 }
-
-function createCar(color, startColumn, direction) {
+function createCar(color, startRow, startColumn, direction) {
   const car = new Group()
   car.name = 'matrix-road-car'
-  car.position.set(worldPosition(5, startColumn).x, 0.16, worldPosition(5, startColumn).z)
+  car.position.set(worldPosition(startRow, startColumn).x, 0.16, worldPosition(startRow, startColumn).z)
+  car.userData.startRow = startRow
   car.userData.startColumn = startColumn
   car.userData.direction = direction
   const body = new Mesh(new BoxGeometry(1.15, 0.28, 0.62), new MeshStandardMaterial({ color, roughness: 0.72, metalness: 0.05 }))
@@ -322,12 +345,11 @@ function createCar(color, startColumn, direction) {
   scene.add(car)
   cars.push(car)
 }
-
 function generateMatrixCity() {
   for (let row = 0; row < MATRIX_ROWS; row += 1) {
     for (let col = 0; col < MATRIX_COLS; col += 1) {
       const value = CITY_MATRIX[row][col]
-      if (value === 0) addConcreteTile(row, col)
+      if (value === 0) addGrassTile(row, col)
       else if (value === 1) createRoadTile(row, col)
       else if (value === 5) createPark(row, col)
       else {
@@ -335,21 +357,21 @@ function generateMatrixCity() {
         const building = createSpriteBuilding(type)
         if (!building) continue
         const { x, z } = worldPosition(row, col)
-        building.position.set(x, 0, z)
+        building.position.set(x, 0.01, z)
         building.userData.matrixCell = { row, col, value }
         scene.add(building)
         buildings.push(building)
       }
     }
   }
-  createCar('#d9544d', 1, 1)
-  createCar('#4b83bd', 8, -1)
+  createCar('#d9544d', 9, 1, 1)
+  createCar('#4b83bd', 10, 18, -1)
 }
 
 const cameraTarget = new Vector3(0, 0, 0)
-const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 300)
-camera.position.set(48, 58, 48)
-camera.zoom = 0.96
+const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 360)
+camera.position.set(72, 78, 72)
+camera.zoom = 0.86
 camera.lookAt(cameraTarget)
 const cameraDirection = new Vector3()
 const cameraRight = new Vector3()
@@ -360,10 +382,14 @@ const panVelocity = new Vector3()
 const lastPanMovement = new Vector3()
 let lastCameraWidth = 0
 let lastCameraHeight = 0
-
+function cameraPanLimit() {
+  const visibleWorldHeight = CAMERA_VIEW_HEIGHT / camera.zoom
+  return Math.max(0, MAP_SIZE / 2 - visibleWorldHeight * 0.38)
+}
 function clampTarget(target) {
   const previous = cameraTarget.clone()
-  cameraTarget.set(MathUtils.clamp(target.x, -LAST_CELL_CENTER, LAST_CELL_CENTER), 0, MathUtils.clamp(target.z, -LAST_CELL_CENTER, LAST_CELL_CENTER))
+  const limit = cameraPanLimit()
+  cameraTarget.set(MathUtils.clamp(target.x, -limit, limit), 0, MathUtils.clamp(target.z, -limit, limit))
   const movement = cameraTarget.clone().sub(previous)
   camera.position.add(movement)
   camera.lookAt(cameraTarget)
@@ -384,10 +410,7 @@ function resizeCamera() {
   camera.updateProjectionMatrix()
   clampTarget(cameraTarget)
 }
-function stopCameraInertia() {
-  panVelocity.set(0, 0, 0)
-  lastPanMovement.set(0, 0, 0)
-}
+function stopCameraInertia() { panVelocity.set(0, 0, 0); lastPanMovement.set(0, 0, 0) }
 function panCameraByPixels(deltaX, deltaY) {
   const height = canvas.clientHeight || window.innerHeight
   const worldUnitsPerPixel = CAMERA_VIEW_HEIGHT / camera.zoom / Math.max(height, 1) * PAN_SENSITIVITY
@@ -409,6 +432,7 @@ function updateCameraInertia() {
 function zoomCameraByFactor(factor) {
   camera.zoom = MathUtils.clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM)
   camera.updateProjectionMatrix()
+  clampTarget(cameraTarget)
 }
 
 const raycaster = new Raycaster()
@@ -416,7 +440,7 @@ const pointer = new Vector2()
 const highlight = new Mesh(new PlaneGeometry(CELL_SIZE, CELL_SIZE), new MeshBasicMaterial({ color: '#39ce66', transparent: true, opacity: 0.35, depthWrite: false }))
 highlight.name = 'placement-highlight'
 highlight.rotation.x = -Math.PI / 2
-highlight.position.y = 0.06
+highlight.position.y = 0.12
 highlight.visible = false
 scene.add(highlight)
 let currentMode = 'ROAD'
@@ -459,7 +483,7 @@ function updateHighlightFromScreen(clientX, clientY) {
   const cell = cellFromScreen(clientX, clientY)
   if (!cell) { highlight.visible = false; return }
   highlight.visible = true
-  highlight.position.set(cell.x, 0.06, cell.z)
+  highlight.position.set(cell.x, 0.12, cell.z)
   highlight.material.color.set(CITY_MATRIX[cell.row][cell.col] === 0 ? '#39ce66' : '#e54848')
 }
 function placeAtScreen(clientX, clientY) {
@@ -469,14 +493,13 @@ function placeAtScreen(clientX, clientY) {
   else {
     const building = createSpriteBuilding(selectedBuildingType)
     if (building) {
-      building.position.set(cell.x, 0, cell.z)
+      building.position.set(cell.x, 0.01, cell.z)
       scene.add(building)
       buildings.push(building)
     }
   }
   updateHighlightFromScreen(clientX, clientY)
 }
-
 const activePointers = new Map()
 let drag = null
 let pinchDistance = 0
@@ -557,13 +580,8 @@ function sortBuildingSprites() {
   camera.updateMatrixWorld(true)
   buildings.map(building => {
     const projected = new Vector3(building.position.x, building.position.y, building.position.z).project(camera)
-    return {
-      building,
-      screenY: (1 - projected.y) * 0.5,
-      cameraDistance: building.position.distanceTo(camera.position),
-    }
+    return { building, screenY: projected.y, cameraDistance: building.position.distanceTo(camera.position) }
   }).sort((a, b) => a.screenY - b.screenY || b.cameraDistance - a.cameraDistance).forEach(({ building }, index) => {
-    // A larger screenY means lower on the screen; later renderOrder draws in front.
     building.renderOrder = 20 + index
   })
 }
@@ -574,7 +592,8 @@ function updateBuildingBubbles() {
   buildings.forEach(building => {
     const bubble = building.userData.bubble
     if (!(bubble instanceof HTMLElement)) return
-    bubblePosition.set(building.position.x, building.position.y + building.geometry.parameters.height * building.scale.y + 0.35, building.position.z).project(camera)
+    const height = buildingTypes[building.userData.type]?.height ?? 4
+    bubblePosition.set(building.position.x, building.position.y + height * building.scale.y + 0.35, building.position.z).project(camera)
     const visible = bubblePosition.z >= -1 && bubblePosition.z <= 1 && bubblePosition.x >= -1.15 && bubblePosition.x <= 1.15 && bubblePosition.y >= -1.15 && bubblePosition.y <= 1.15
     bubble.hidden = !visible
     if (visible) {
@@ -587,11 +606,11 @@ function animate() {
   resizeCamera()
   updateCameraInertia()
   const time = performance.now() * 0.00045
-  const roadZ = worldPosition(5, 0).z
   cars.forEach((car, index) => {
-    const baseX = worldPosition(5, index === 0 ? 1 : 8).x
+    const row = index === 0 ? 9 : 10
+    const baseX = worldPosition(row, index === 0 ? 1 : 18).x
     car.position.x = baseX + Math.sin(time * 1.15 + index * Math.PI) * CELL_SIZE * 3.2 * car.userData.direction
-    car.position.z = roadZ
+    car.position.z = worldPosition(row, 0).z
   })
   sortBuildingSprites()
   updateBuildingBubbles()
@@ -601,7 +620,6 @@ function animate() {
 updateToolbar()
 resizeCamera()
 requestAnimationFrame(animate)
-
 window.__game = {
   matrix: CITY_MATRIX,
   world: { scene, ground, ambient, sun, buildings, roads, parks, cars, createRoadTile, createSpriteBuilding },
