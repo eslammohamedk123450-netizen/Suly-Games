@@ -15,7 +15,6 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   OrthographicCamera,
-  PCFSoftShadowMap,
   PlaneGeometry,
   Raycaster,
   Scene,
@@ -54,19 +53,17 @@ const canvas = document.querySelector('#game')
 if (!(canvas instanceof HTMLCanvasElement)) throw new Error('Game canvas was not found')
 
 const renderer = new Renderer(canvas)
-renderer.gl.shadowMap.enabled = true
-renderer.gl.shadowMap.type = PCFSoftShadowMap
+renderer.gl.shadowMap.enabled = false
 renderer.gl.outputColorSpace = SRGBColorSpace
 
 const scene = new Scene()
 scene.background = new Color('#d8d2c5')
 
-const concreteMaterial = new MeshStandardMaterial({ color: '#c7c3b9', roughness: 0.95, metalness: 0 })
+const grassMaterial = new MeshStandardMaterial({ color: 0x7cb342, roughness: 0.95, metalness: 0 })
 const concreteTileGeometry = new PlaneGeometry(CELL_SIZE, CELL_SIZE)
-const ground = new Mesh(new PlaneGeometry(MAP_SIZE, MAP_SIZE), concreteMaterial)
-ground.name = 'city-concrete-ground'
+const ground = new Mesh(new PlaneGeometry(MAP_SIZE, MAP_SIZE), grassMaterial)
+ground.name = 'city-grass-ground'
 ground.rotation.x = -Math.PI / 2
-ground.receiveShadow = true
 scene.add(ground)
 
 const grid = new GridHelper(MAP_SIZE, MATRIX_COLS, '#aaa69c', '#b8b3a9')
@@ -80,6 +77,7 @@ for (const material of gridMaterials) {
   material.color.set('#aaa69c')
 }
 scene.add(grid)
+grid.visible = false
 
 const ambient = new AmbientLight('#e1ded5', 0.52)
 scene.add(ambient)
@@ -87,7 +85,7 @@ const sun = new DirectionalLight('#fff1d5', 3.5)
 sun.name = 'city-sun'
 sun.position.set(48, 56, 32)
 sun.target.position.set(0, 0, 0)
-sun.castShadow = true
+sun.castShadow = false
 sun.shadow.mapSize.set(2048, 2048)
 sun.shadow.camera.left = -42
 sun.shadow.camera.right = 42
@@ -110,6 +108,7 @@ const buildingTextures = Object.create(null)
 const buildingMaterials = Object.create(null)
 const spriteGeometries = Object.create(null)
 const buildings = []
+const bubbleLayer = document.querySelector('#building-bubbles')
 const roads = []
 const parks = []
 const cars = []
@@ -170,11 +169,10 @@ function worldPosition(row, col) {
 }
 function addConcreteTile(row, col) {
   const { x, z } = worldPosition(row, col)
-  const tile = new Mesh(concreteTileGeometry, concreteMaterial)
-  tile.name = `concrete-cell-${row}-${col}`
+  const tile = new Mesh(concreteTileGeometry, grassMaterial)
+  tile.name = `grass-cell-${row}-${col}`
   tile.rotation.x = -Math.PI / 2
   tile.position.set(x, 0.012, z)
-  tile.receiveShadow = true
   scene.add(tile)
 }
 function createRoadTile(row, col) {
@@ -266,10 +264,18 @@ function createSpriteBuilding(type) {
   building.rotation.y = Math.PI / 4
   building.scale.setScalar(1.2)
   building.position.y = 0
-  building.castShadow = true
-  building.receiveShadow = false
   building.userData.type = type
+  building.userData.bubble = createBuildingBubble(type)
   return building
+}
+
+function createBuildingBubble(type) {
+  if (!(bubbleLayer instanceof HTMLElement)) return null
+  const bubble = document.createElement('div')
+  bubble.className = 'building-bubble'
+  bubble.textContent = `${type === 'HOUSE' ? 'House' : type === 'SHOP' ? 'Shop' : 'Skyscraper'} +${type === 'HOUSE' ? 10 : type === 'SHOP' ? 15 : 25}`
+  bubbleLayer.appendChild(bubble)
+  return bubble
 }
 
 const parkMaterial = new MeshStandardMaterial({ color: '#4f8050', roughness: 1, metalness: 0 })
@@ -342,7 +348,7 @@ function generateMatrixCity() {
 
 const cameraTarget = new Vector3(0, 0, 0)
 const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 300)
-camera.position.set(48, 48, 48)
+camera.position.set(48, 58, 48)
 camera.zoom = 0.96
 camera.lookAt(cameraTarget)
 const cameraDirection = new Vector3()
@@ -561,6 +567,22 @@ function sortBuildingSprites() {
     building.renderOrder = 20 + index
   })
 }
+function updateBuildingBubbles() {
+  if (!(bubbleLayer instanceof HTMLElement)) return
+  const rect = canvas.getBoundingClientRect()
+  const bubblePosition = new Vector3()
+  buildings.forEach(building => {
+    const bubble = building.userData.bubble
+    if (!(bubble instanceof HTMLElement)) return
+    bubblePosition.set(building.position.x, building.position.y + building.geometry.parameters.height * building.scale.y + 0.35, building.position.z).project(camera)
+    const visible = bubblePosition.z >= -1 && bubblePosition.z <= 1 && bubblePosition.x >= -1.15 && bubblePosition.x <= 1.15 && bubblePosition.y >= -1.15 && bubblePosition.y <= 1.15
+    bubble.hidden = !visible
+    if (visible) {
+      bubble.style.left = `${(bubblePosition.x * 0.5 + 0.5) * rect.width}px`
+      bubble.style.top = `${(-bubblePosition.y * 0.5 + 0.5) * rect.height}px`
+    }
+  })
+}
 function animate() {
   resizeCamera()
   updateCameraInertia()
@@ -572,6 +594,7 @@ function animate() {
     car.position.z = roadZ
   })
   sortBuildingSprites()
+  updateBuildingBubbles()
   renderer.render(scene, camera)
   requestAnimationFrame(animate)
 }
