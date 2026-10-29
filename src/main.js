@@ -29,6 +29,8 @@ import { Renderer } from './engine/renderer'
 
 const MAP_SIZE = 72
 const CELL_SIZE = 2
+const CITY_BLOCK_SPAN = 7
+const ROAD_WIDTH = 1
 const CAMERA_VIEW_HEIGHT = 56
 const PAN_SENSITIVITY = 1
 const MIN_ZOOM = 0.6
@@ -45,11 +47,11 @@ renderer.gl.shadowMap.type = PCFSoftShadowMap
 renderer.gl.outputColorSpace = SRGBColorSpace
 
 const scene = new Scene()
-scene.background = new Color('#b9d9ad')
+scene.background = new Color('#d8d2c5')
 
 const ground = new Mesh(
   new PlaneGeometry(MAP_SIZE, MAP_SIZE),
-  new MeshStandardMaterial({ color: '#71b965', roughness: 1, metalness: 0 }),
+  new MeshStandardMaterial({ color: '#c8c4b9', roughness: 0.94, metalness: 0 }),
 )
 ground.name = 'city-ground'
 ground.rotation.x = -Math.PI / 2
@@ -57,7 +59,7 @@ ground.receiveShadow = true
 scene.add(ground)
 
 const divisions = Math.max(1, Math.round(MAP_SIZE / CELL_SIZE))
-const grid = new GridHelper(MAP_SIZE, divisions, '#315f32', '#43803f')
+const grid = new GridHelper(MAP_SIZE, divisions, '#aaa79d', '#b9b5aa')
 grid.name = 'city-grid'
 grid.position.y = 0.04
 grid.userData.divisions = divisions
@@ -65,16 +67,16 @@ grid.userData.cellSize = CELL_SIZE
 const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material]
 for (const material of gridMaterials) {
   material.transparent = true
-  material.opacity = 0.8
+  material.opacity = 0.24
   material.depthWrite = false
-  material.color.set('#315f32')
+  material.color.set('#aaa79d')
 }
 scene.add(grid)
 
-const ambient = new AmbientLight('#d9e8ff', 0.38)
+const ambient = new AmbientLight('#d9d8d2', 0.32)
 scene.add(ambient)
 
-const sun = new DirectionalLight('#fff4d6', 2.8)
+const sun = new DirectionalLight('#fff1d2', 3.4)
 sun.name = 'city-sun'
 sun.position.set(34, 68, 30)
 sun.target.position.set(0, 0, 0)
@@ -89,7 +91,7 @@ sun.shadow.camera.far = 180
 sun.shadow.camera.updateProjectionMatrix()
 sun.shadow.bias = -0.00025
 sun.shadow.normalBias = 0.025
-sun.shadow.radius = 5
+sun.shadow.radius = 2.5
 scene.add(sun, sun.target)
 
 const buildingTypes = {
@@ -162,10 +164,12 @@ const asphaltMaterial = new MeshStandardMaterial({ color: '#42494b', roughness: 
 const curbMaterial = new MeshStandardMaterial({ color: '#848c8b', roughness: 0.9, metalness: 0 })
 const dashGeometry = new BoxGeometry(0.34, 0.012, 0.075)
 const dashMaterial = new MeshStandardMaterial({ color: '#fff6d8', roughness: 0.8, metalness: 0 })
-const longCurbGeometry = new BoxGeometry(CELL_SIZE, 0.045, 0.1)
-const sideCurbGeometry = new BoxGeometry(0.1, 0.045, CELL_SIZE)
+const longCurbGeometry = new BoxGeometry(CELL_SIZE, 0.14, 0.22)
+const sideCurbGeometry = new BoxGeometry(0.22, 0.14, CELL_SIZE)
+const zebraGeometry = new BoxGeometry(0.14, 0.018, 0.58)
+const zebraMaterial = new MeshStandardMaterial({ color: '#f8f4df', roughness: 0.82 })
 
-function createRoadTile() {
+function createRoadTile(intersection = false) {
   const road = new Group()
   road.name = 'procedural-road-tile'
 
@@ -178,14 +182,14 @@ function createRoadTile() {
 
   for (const z of [-0.95, 0.95]) {
     const curb = new Mesh(longCurbGeometry, curbMaterial)
-    curb.position.set(0, 0.033, z)
+    curb.position.set(0, 0.08, z)
     curb.receiveShadow = true
     curb.castShadow = false
     road.add(curb)
   }
   for (const x of [-0.95, 0.95]) {
     const curb = new Mesh(sideCurbGeometry, curbMaterial)
-    curb.position.set(x, 0.033, 0)
+    curb.position.set(x, 0.08, 0)
     curb.receiveShadow = true
     curb.castShadow = false
     road.add(curb)
@@ -197,6 +201,15 @@ function createRoadTile() {
     dash.receiveShadow = true
     dash.castShadow = false
     road.add(dash)
+  }
+
+  if (intersection) {
+    for (const x of [-0.7, -0.42, -0.14, 0.14, 0.42, 0.7]) {
+      const stripe = new Mesh(zebraGeometry, zebraMaterial)
+      stripe.position.set(x, 0.045, 0)
+      stripe.receiveShadow = true
+      road.add(stripe)
+    }
   }
 
   road.traverse(object => {
@@ -246,7 +259,10 @@ const world = {
   },
   addRoad(x, z) {
     if (this.isCellOccupied(x, z)) return null
-    const tile = createRoadTile()
+    const column = Math.round((x - FIRST_CELL_CENTER) / CELL_SIZE)
+    const row = Math.round((z - FIRST_CELL_CENTER) / CELL_SIZE)
+    const intersection = column % CITY_BLOCK_SPAN === 0 && row % CITY_BLOCK_SPAN === 0
+    const tile = createRoadTile(intersection)
     tile.position.set(x, 0, z)
     tile.userData.cell = { x, z }
     scene.add(tile)
@@ -307,10 +323,24 @@ function createCar(x, z, color, direction = 1) {
   return car
 }
 
+const parkMaterial = new MeshStandardMaterial({ color: '#78966f', roughness: 1, metalness: 0 })
+const parkGeometry = new PlaneGeometry(7.5, 7.5)
+function createParkZone(x, z) {
+  const park = new Mesh(parkGeometry, parkMaterial)
+  park.name = 'designated-park-zone'
+  park.rotation.x = -Math.PI / 2
+  park.position.set(x, 0.025, z)
+  park.receiveShadow = true
+  scene.add(park)
+  for (const [dx, dz, scale] of [[-2.2, -2.2, 0.75], [2.2, -2.2, 0.85], [-2.2, 2.2, 0.8], [2.2, 2.2, 0.72]]) {
+    createTree(x + dx, z + dz, scale)
+  }
+}
+
 function populateCityBlocks() {
   const cellCount = Math.round(MAP_SIZE / CELL_SIZE)
-  const roadBand = 1
-  const blockSpan = 8
+  const roadBand = ROAD_WIDTH
+  const blockSpan = CITY_BLOCK_SPAN
   for (let column = 0; column < cellCount; column += 1) {
     for (let row = 0; row < cellCount; row += 1) {
       const x = FIRST_CELL_CENTER + column * CELL_SIZE
@@ -321,17 +351,15 @@ function populateCityBlocks() {
   for (let blockX = 0; blockX < cellCount; blockX += blockSpan) {
     for (let blockZ = 0; blockZ < cellCount; blockZ += blockSpan) {
       if (blockX + blockSpan >= cellCount || blockZ + blockSpan >= cellCount) continue
-      const lots = [[2, 2], [5, 2], [2, 5], [5, 5]]
+      const blockCenterX = FIRST_CELL_CENTER + (blockX + 3.5) * CELL_SIZE
+      const blockCenterZ = FIRST_CELL_CENTER + (blockZ + 3.5) * CELL_SIZE
+      if ((blockX / blockSpan + blockZ / blockSpan) % 3 === 0) createParkZone(blockCenterX, blockCenterZ)
+      const lots = [[1, 1], [3, 1], [5, 1], [1, 4], [3, 4], [5, 4]]
       lots.forEach(([dx, dz], lotIndex) => {
-        if (Math.random() >= 0.5) {
-          createTree(FIRST_CELL_CENTER + (blockX + dx) * CELL_SIZE, FIRST_CELL_CENTER + (blockZ + dz) * CELL_SIZE, 0.9)
-          return
-        }
+        if (Math.random() >= 0.82) return
         const x = FIRST_CELL_CENTER + (blockX + dx) * CELL_SIZE
         const z = FIRST_CELL_CENTER + (blockZ + dz) * CELL_SIZE
-        const type = lotIndex === 0 && (blockX + blockZ) % 3 === 0
-          ? 'SKYSCRAPER'
-          : lotIndex === 3 ? 'SHOP' : 'HOUSE'
+        const type = lotIndex % 3 === 2 ? 'SHOP' : 'HOUSE'
         const building = createSpriteBuilding(type)
         if (!building) return
         building.position.set(x, 0, z)
@@ -339,19 +367,17 @@ function populateCityBlocks() {
         scene.add(building)
         buildings.push(building)
       })
-      createTree(FIRST_CELL_CENTER + (blockX + 1) * CELL_SIZE, FIRST_CELL_CENTER + (blockZ + 1) * CELL_SIZE, 0.9)
-      createTree(FIRST_CELL_CENTER + (blockX + 6) * CELL_SIZE, FIRST_CELL_CENTER + (blockZ + 6) * CELL_SIZE, 1.05)
     }
   }
-  createCar(-24, -1, '#d9544d', 1)
-  createCar(18, 1, '#4b83bd', -1)
-  createCar(-2, 24, '#e8a33b', 1)
+  createCar(-24, -3, '#d9544d', 1)
+  createCar(13, 1, '#4b83bd', -1)
+  createCar(-3, 24, '#e8a33b', 1)
 }
 
 const cameraTarget = new Vector3(0, 0, 0)
 const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 300)
 camera.position.set(44, 44, 44)
-camera.zoom = 1.18
+camera.zoom = 1.26
 camera.lookAt(cameraTarget)
 const cameraDirection = new Vector3()
 const cameraRight = new Vector3()

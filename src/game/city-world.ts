@@ -9,11 +9,11 @@ export class CityWorld {
   readonly buildings: THREE.Group[] = []
 
   constructor() {
-    this.scene.background = new THREE.Color('#b9d9ad')
+    this.scene.background = new THREE.Color('#d8d2c5')
 
     this.ground = new THREE.Mesh(
       new THREE.PlaneGeometry(CONFIG.city.mapSize, CONFIG.city.mapSize),
-      new THREE.MeshStandardMaterial({ color: '#71b965', roughness: 1, metalness: 0 }),
+        new THREE.MeshStandardMaterial({ color: '#c8c4b9', roughness: 0.94, metalness: 0 }),
     )
     this.ground.name = 'city-ground'
     this.ground.rotation.x = -Math.PI / 2
