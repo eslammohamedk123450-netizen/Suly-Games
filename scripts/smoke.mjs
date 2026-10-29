@@ -36,6 +36,7 @@ async function openGame(context, errors) {
   page.on('response', response => response.status() >= 400 && errors.push(`HTTP ${response.status()} ${response.url()}`))
   await page.goto(url)
   await page.waitForFunction(() => Boolean(window.__game), { timeout: 30_000 })
+  await page.waitForFunction(() => window.__game.spritesReady, { timeout: 30_000 })
   await page.waitForTimeout(500)
   return page
 }
@@ -80,7 +81,7 @@ try {
 
   await clickCell(page, 1, 1)
   await page.waitForFunction(() => window.__game.world.roads.length === 1)
-  await page.locator('#mode-toggle').click()
+  await page.locator('#tool-house').click()
   await clickCell(page, -15, -15)
   await page.waitForTimeout(100)
   const rejected = await page.evaluate(() => ({ count: window.__game.world.buildings.length, color: window.__game.world.scene.getObjectByName('placement-highlight').material.color.getHexString() }))
@@ -92,16 +93,43 @@ try {
     const { world } = window.__game
     const building = world.buildings[0]
     const road = world.roads[0]
-    const meshes = []
-    building.traverse(node => { if (node.isMesh) meshes.push({ castShadow: node.castShadow, receiveShadow: node.receiveShadow }) })
     const roadMeshes = []
     road.traverse(node => { if (node.isMesh) roadMeshes.push({ castShadow: node.castShadow, receiveShadow: node.receiveShadow, y: node.position.y }) })
-    return { position: building.position.toArray(), meshCount: meshes.length, meshes, roadPosition: road.position.toArray(), roadMeshes }
+    return {
+      position: building.position.toArray(),
+      type: building.userData.type,
+      mesh: { isMesh: building.isMesh, castShadow: building.castShadow, receiveShadow: building.receiveShadow, renderOrder: building.renderOrder },
+      geometry: { width: building.geometry.parameters.width, height: building.geometry.parameters.height, minY: building.geometry.boundingBox?.min.y },
+      material: { transparent: building.material.transparent, alphaTest: building.material.alphaTest, side: building.material.side, hasMap: Boolean(building.material.map) },
+      roadPosition: road.position.toArray(),
+      roadMeshes,
+    }
   })
   const firstCellCenter = -initial.ground.width / 2 + initial.grid.cellSize / 2
   const isCenteredOnCell = value => Math.abs((value - firstCellCenter) / initial.grid.cellSize - Math.round((value - firstCellCenter) / initial.grid.cellSize)) < 1e-6
-  if (placed.position[1] !== 0 || !isCenteredOnCell(placed.position[0]) || !isCenteredOnCell(placed.position[2]) || placed.meshCount < 2 || placed.meshes.some(mesh => !mesh.castShadow || !mesh.receiveShadow)) throw new Error(`building grounding/grid/shadows mismatch: ${JSON.stringify(placed)}`)
-  if (placed.roadPosition[1] !== 0 || placed.roadMeshes.length < 4 || placed.roadMeshes[0].y !== 0.01 || !placed.roadMeshes[0].receiveShadow) throw new Error(`road tile geometry/height/shadow mismatch: ${JSON.stringify(placed.roadMeshes)}`)
+  if (placed.position[1] !== 0 || !isCenteredOnCell(placed.position[0]) || !isCenteredOnCell(placed.position[2]) || placed.type !== 'HOUSE' || !placed.mesh.isMesh || placed.mesh.castShadow || placed.mesh.receiveShadow || Math.abs(placed.geometry.minY) > 1e-6 || placed.geometry.height < 4 || !placed.material.transparent || placed.material.alphaTest !== 0.5 || !placed.material.hasMap) throw new Error(`sprite pivot/material/shadow mismatch: ${JSON.stringify(placed)}`)
+  if (placed.roadPosition[1] !== 0 || placed.roadMeshes.length < 8 || placed.roadMeshes[0].y !== 0.01 || !placed.roadMeshes[0].receiveShadow) throw new Error(`road tile geometry/height/shadow mismatch: ${JSON.stringify(placed.roadMeshes)}`)
+
+  await page.locator('#tool-road').click()
+  await clickCell(page, 1, 3)
+  await page.waitForFunction(() => window.__game.world.roads.length === 2)
+  await page.locator('#tool-shop').click()
+  await clickCell(page, 1, 5)
+  await page.waitForFunction(() => window.__game.world.buildings.length === 2)
+  await page.locator('#tool-road').click()
+  await clickCell(page, 3, 3)
+  await page.waitForFunction(() => window.__game.world.roads.length === 3)
+  await page.locator('#tool-skyscraper').click()
+  await clickCell(page, 3, 5)
+  await page.waitForFunction(() => window.__game.world.buildings.length === 3)
+  const sortedSprites = await page.evaluate(() => window.__game.world.buildings.map(building => ({ type: building.userData.type, renderOrder: building.renderOrder })))
+  const orderByType = Object.fromEntries(sortedSprites.map(building => [building.type, building.renderOrder]))
+  if (sortedSprites.length !== 3 || orderByType.HOUSE >= orderByType.SHOP || orderByType.SHOP >= orderByType.SKYSCRAPER) throw new Error(`sprite depth sort mismatch: ${JSON.stringify(sortedSprites)}`)
+
+  await page.evaluate(() => window.__game.zoomCameraByFactor(2.3))
+  await page.waitForTimeout(150)
+  await page.screenshot({ path: `${out}/02-city-sprites.png` })
+  await page.evaluate(() => window.__game.zoomCameraByFactor(1 / 2.3))
 
   const cameraBefore = await page.evaluate(() => window.__game.camera.position.toArray())
   await page.mouse.move(900, 360)
@@ -111,14 +139,13 @@ try {
   await page.waitForTimeout(350)
   const cameraAfter = await page.evaluate(() => ({ position: window.__game.camera.position.toArray(), count: window.__game.world.buildings.length }))
   if (Math.hypot(...cameraAfter.position.map((value, index) => value - cameraBefore[index])) < 0.1) throw new Error('drag did not pan the camera')
-  if (cameraAfter.count !== 1) throw new Error('camera drag placed an unintended building')
+  if (cameraAfter.count !== 3) throw new Error('camera drag placed an unintended building')
   const zoomBefore = await page.evaluate(() => window.__game.camera.zoom)
   await page.mouse.wheel(0, -250)
   await page.waitForTimeout(100)
   const zoomAfter = await page.evaluate(() => window.__game.camera.zoom)
   if (zoomAfter <= zoomBefore) throw new Error('wheel zoom did not increase OrthographicCamera.zoom')
-  await page.screenshot({ path: `${out}/02-city-building.png` })
-  console.log(`smoke: desktop camera=${initial.cameraType}, road=${placed.roadPosition.join(',')}, building=${placed.position.join(',')}, drag=inertial, zoom=${zoomAfter.toFixed(2)}`)
+  console.log(`smoke: desktop camera=${initial.cameraType}, sprite types=${sortedSprites.map(item => item.type).join(',')}, drag=inertial, zoom=${zoomAfter.toFixed(2)}`)
   await desktop.close()
 
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
@@ -128,7 +155,7 @@ try {
   await phonePage.screenshot({ path: `${out}/03-city-mobile.png` })
   await clickCell(phonePage, 1, 1)
   await phonePage.waitForFunction(() => window.__game.world.roads.length === 1)
-  await phonePage.locator('#mode-toggle').click()
+  await phonePage.locator('#tool-house').click()
   await clickCell(phonePage, 3, 1)
   await phonePage.waitForFunction(() => window.__game.world.buildings.length === 1)
   const mobilePlacement = await phonePage.evaluate(() => window.__game.world.buildings[0].position.toArray())

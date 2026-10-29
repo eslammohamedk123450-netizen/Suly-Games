@@ -21,15 +21,15 @@
 - [x] «Add a `THREE.GridHelper` so we can visually see the grid cells (we will hide it later).» — حجم الخلية 2×2 ويتوافق مع قاعدة المبنى.
 
 ## المبنى الأول ووضعه بالنقر/اللمس
-- [x] «Implement a `createBuilding()` function. Do NOT use external images or textures. Use only Three.js primitives (e.g., `BoxGeometry` for the base and `ConeGeometry` for the roof). Give them solid colors.»
-- [x] «Ensure all meshes inside the building have `castShadow = true` and `receiveShadow = true`.»
+- [x] «Implement a `createBuilding()` function. Do NOT use external images or textures. Use only Three.js primitives (e.g., `BoxGeometry` for the base and `ConeGeometry` for the roof). Give them solid colors.» — شرط مرحلة التأسيس السابقة؛ استبدله التوجيه الأحدث بصور sprites.
+- [x] «Ensure all meshes inside the building have `castShadow = true` and `receiveShadow = true`.» — كان خاصًا بالمباني البدائية؛ sprites الحالية لا ترمي الظلال لمنع الظلال المربعة.
 - [x] «Implement a `THREE.Raycaster`. When the user taps/clicks on the ground plane, instantiate the building and place it at the clicked coordinates.» — يلتقط النقرة ويُحاذي المبنى إلى مركز أقرب خلية.
 - [x] «Pivot Point & Grounding (Y=0): When generating the building, ensure the pivot point is at the absolute bottom center. The building group must be placed at `Y = 0` relative to the ground so it sits perfectly on the grid and does NOT float or sink into the ground.»
 - [x] «Shadow Optimization: Ensure the building casts a soft shadow onto the ground to create the 2.5D depth effect.»
 
 ## نطاق الأصول والواجهة
 - [x] «For this first step, I ONLY want the foundational environment: The Map and the ability to place the first building. Do NOT add any game logic, complex UI, or menus yet.»
-- [x] «No External Assets: Keep it 100% procedural (generated via code) to keep the bundle size extremely small and avoid loading issues.» — عناصر اللعب هندسية برمجية؛ أيقونة المشاركة رسم هندسي برمجي مستقل عن المشهد.
+- [x] «No External Assets: Keep it 100% procedural (generated via code) to keep the bundle size extremely small and avoid loading issues.» — شرط مرحلة التأسيس السابقة؛ يستخدم التحديث البصري الحالي صور المستخدم الشفافة.
 - [x] «The shape of the buildings can be developed later; keep the first building simple and procedural for now.»
 - [x] «Output the complete, clean, runnable HTML and JS code.» — مدمج في مشروع Three.js/TypeScript/Vite القائم وقابل للتشغيل والبناء.
 
@@ -49,3 +49,13 @@
 - [x] «Clamp the camera bounds so the user cannot pan outside the edges of the ground Plane.» — يقيّد موضع هدف الكاميرا بين مراكز الخلايا الطرفية.
 - [x] «Add a visual highlight (e.g., a translucent green or red square mesh) that follows the user's finger/cursor over the grid. It should be Green when placement is valid (e.g., empty cell, adjacent to road) and Red when placement is invalid.» — المربع يتحدث أثناء المؤشر واللمس بحسب الوضع والإشغال والتجاور.
 - [x] «Use specific named imports for Three.js (e.g., `import { Raycaster, Vector2, ... } from 'three';`); keep lighting and shadow maps configured exactly as they are (PCFSoftShadowMap); ensure all meshes cast and receive shadows correctly; use procedural primitive geometry only.» — لا أصول خارجية أو نماذج GLTF أو تبعيات جديدة.
+
+## التحديث البصري بالـsprites (الحفاظ على الخريطة والمنطق)
+- [x] «DO NOT generate a new map or auto-populate the grid.» — يبدأ العالم دون إضافة طرق أو مبانٍ تلقائيًا؛ فحص smoke يتحقق من خلوه عند البدء.
+- [x] «Remove the old procedural `BoxGeometry` building creation. Use `THREE.TextureLoader` to load the uploaded images from the `/assets/` folder.» — نسخ شفافة محسّنة من `House 1.png` و`Shop.png` و`Build 2.png` إلى `public/assets/house.png`, `shop.png`, `skyscraper.png`.
+- [x] «Create the buildings using `THREE.PlaneGeometry`. Translate the geometry so the bottom edge is at Y=0; the mesh Y position on the map must be 0.» — التحقق الآلي يتأكد من `geometry.boundingBox.min.y` وموضع المبنى.
+- [x] «Use `THREE.MeshStandardMaterial({ map, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide })` so transparent PNG backgrounds work and do not cast square shadows.» — مادة alpha شفافة، والمباني لا ترمي ظلالًا.
+- [x] «Keep the current road placement logic exactly as it is. Only upgrade `createRoadTile()`: dark grey base plane, lighter curb on the edges, dashed white lines in the center.» — تعديل زخرفي داخل منشئ الطريق مع إبقاء اختبار وضع الطرق.
+- [x] «Implement manual depth sorting in the animation loop; buildings lower on screen render on top of buildings behind them.» — ترتيب كل frame حسب إحداثي الشاشة الرأسي للمرتكز.
+- [x] «Add bottom toolbar buttons: Road, House, Shop, Skyscraper.» — لكل نوع اختيار مستقل مع استمرار قواعد الوضع والتجاور.
+- [x] فحص `pnpm typecheck`, `pnpm manus:build-source`, `pnpm test`, و`pnpm smoke`؛ التقطت المعاينة من اللعبة بعد وضع sprites يدويًا في جلسة الاختبار.

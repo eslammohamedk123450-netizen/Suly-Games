@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
@@ -7,35 +7,64 @@
     <title>Suly City</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <style>
-      #mode-toggle {
+      #tool-toolbar {
         position: fixed;
         z-index: 5;
-        inset-block-start: max(12px, env(safe-area-inset-top));
-        inset-inline-start: max(12px, env(safe-area-inset-right));
-        min-height: 44px;
-        padding: 0 16px;
-        border: 1px solid rgba(34, 67, 38, 0.24);
-        border-radius: 999px;
-        background: rgba(250, 255, 247, 0.94);
-        color: #27472a;
-        box-shadow: 0 3px 12px rgba(26, 54, 25, 0.2);
-        font: 600 14px/1.2 system-ui, sans-serif;
+        left: 50%;
+        bottom: max(12px, env(safe-area-inset-bottom));
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 7px;
+        width: min(460px, calc(100vw - 20px));
+        padding: 8px;
+        transform: translateX(-50%);
+        border: 1px solid rgba(38, 66, 38, 0.2);
+        border-radius: 18px;
+        background: rgba(248, 253, 245, 0.94);
+        box-shadow: 0 8px 28px rgba(23, 45, 23, 0.24);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .tool-button {
+        min-width: 0;
+        min-height: 50px;
+        padding: 0 8px;
+        border: 1px solid rgba(47, 68, 48, 0.14);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.72);
+        color: #344636;
+        font: 600 13px/1.2 system-ui, sans-serif;
+        white-space: nowrap;
         -webkit-tap-highlight-color: transparent;
         touch-action: manipulation;
       }
-      #mode-toggle[data-mode="building"] {
-        background: rgba(255, 248, 235, 0.96);
-        color: #5d3828;
+      .tool-button.is-active {
+        border-color: #356f42;
+        background: #356f42;
+        color: #fff;
+        box-shadow: 0 3px 9px rgba(28, 83, 43, 0.24);
       }
-      #mode-toggle:focus-visible {
+      .tool-button:disabled {
+        opacity: 0.48;
+      }
+      .tool-button:focus-visible {
         outline: 3px solid #356b3b;
-        outline-offset: 3px;
+        outline-offset: 2px;
+      }
+      @media (max-width: 370px) {
+        #tool-toolbar { gap: 4px; padding: 6px; }
+        .tool-button { min-height: 46px; padding-inline: 3px; font-size: 11px; }
       }
     </style>
   </head>
   <body>
     <canvas id="game" aria-label="Suly City isometric city builder"></canvas>
-    <button id="mode-toggle" type="button" aria-pressed="false">وضع الطريق · R</button>
+    <nav id="tool-toolbar" aria-label="City placement tools" dir="ltr">
+      <button id="tool-road" class="tool-button is-active" type="button" data-tool="ROAD" aria-pressed="true">Road</button>
+      <button id="tool-house" class="tool-button" type="button" data-tool="HOUSE" aria-pressed="false" disabled>House</button>
+      <button id="tool-shop" class="tool-button" type="button" data-tool="SHOP" aria-pressed="false" disabled>Shop</button>
+      <button id="tool-skyscraper" class="tool-button" type="button" data-tool="SKYSCRAPER" aria-pressed="false" disabled>Skyscraper</button>
+    </nav>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

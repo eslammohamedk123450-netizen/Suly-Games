@@ -2,10 +2,12 @@ import {
   AmbientLight,
   BoxGeometry,
   Color,
-  ConeGeometry,
+  DoubleSide,
   DirectionalLight,
   GridHelper,
   Group,
+  LinearFilter,
+  LinearMipmapLinearFilter,
   MathUtils,
   Mesh,
   MeshBasicMaterial,
@@ -16,6 +18,7 @@ import {
   Raycaster,
   Scene,
   SRGBColorSpace,
+  TextureLoader,
   Vector2,
   Vector3,
 } from 'three'
@@ -87,42 +90,73 @@ sun.shadow.normalBias = 0.025
 sun.shadow.radius = 3
 scene.add(sun, sun.target)
 
-const buildingMaterials = {
-  base: new MeshStandardMaterial({ color: '#e8d5ad', roughness: 0.88 }),
-  roof: new MeshStandardMaterial({ color: '#bd6448', roughness: 0.9 }),
-  door: new MeshStandardMaterial({ color: '#76513a', roughness: 1 }),
+const buildingTypes = {
+  HOUSE: { asset: 'house.png', height: 4.8 },
+  SHOP: { asset: 'shop.png', height: 4.8 },
+  SKYSCRAPER: { asset: 'skyscraper.png', height: 6.8 },
 }
+const buildingTextures = Object.create(null)
+const buildingMaterials = Object.create(null)
+const buildingGeometries = Object.create(null)
+let spritesReady = false
+const textureLoader = new TextureLoader()
 
-function createBuilding() {
-  const group = new Group()
-  group.name = 'procedural-building'
+const spriteLoadPromise = Promise.all(Object.entries(buildingTypes).map(([type, definition]) => new Promise((resolve, reject) => {
+  const url = `${import.meta.env.BASE_URL}assets/${definition.asset}`
+  textureLoader.load(url, texture => {
+    texture.colorSpace = SRGBColorSpace
+    texture.minFilter = LinearMipmapLinearFilter
+    texture.magFilter = LinearFilter
+    texture.needsUpdate = true
+    buildingTextures[type] = texture
+    buildingMaterials[type] = new MeshStandardMaterial({
+      map: texture,
+      transparent: true,
+      alphaTest: 0.5,
+      side: DoubleSide,
+      roughness: 1,
+    })
+    resolve(texture)
+  }, undefined, reject)
+}))).then(() => {
+  spritesReady = true
+  updateToolbar()
+}).catch(error => {
+  console.error('Building sprite loading failed:', error)
+  updateToolbar()
+})
 
-  const base = new Mesh(new BoxGeometry(CELL_SIZE, 2, CELL_SIZE), buildingMaterials.base)
-  base.position.y = 1
-  group.add(base)
+function createBuilding(type = 'HOUSE') {
+  const definition = buildingTypes[type]
+  const texture = buildingTextures[type]
+  if (!definition || !texture) return null
 
-  const roof = new Mesh(new ConeGeometry(1.48, 1.82, 4), buildingMaterials.roof)
-  roof.position.y = 2.91
-  roof.rotation.y = Math.PI / 4
-  group.add(roof)
+  let geometry = buildingGeometries[type]
+  if (!geometry) {
+    const height = definition.height
+    const width = height * texture.image.width / texture.image.height
+    geometry = new PlaneGeometry(width, height)
+    geometry.translate(0, height / 2, 0)
+    geometry.computeBoundingBox()
+    buildingGeometries[type] = geometry
+  }
 
-  const door = new Mesh(new BoxGeometry(0.48, 0.9, 0.08), buildingMaterials.door)
-  door.position.set(0, 0.45, 1.04)
-  group.add(door)
-
-  group.traverse(object => {
-    if (object instanceof Mesh) {
-      object.castShadow = true
-      object.receiveShadow = true
-    }
-  })
-  return group
+  const building = new Mesh(geometry, buildingMaterials[type])
+  building.name = `sprite-building-${type.toLowerCase()}`
+  building.rotation.y = Math.PI / 4
+  building.castShadow = false
+  building.receiveShadow = false
+  building.userData.type = type
+  return building
 }
 
 const asphaltGeometry = new PlaneGeometry(CELL_SIZE, CELL_SIZE)
-const asphaltMaterial = new MeshStandardMaterial({ color: '#777d7d', roughness: 0.95, metalness: 0 })
-const dashGeometry = new PlaneGeometry(0.42, 0.12)
-const dashMaterial = new MeshStandardMaterial({ color: '#f6f0d5', roughness: 0.8, metalness: 0 })
+const asphaltMaterial = new MeshStandardMaterial({ color: '#42494b', roughness: 0.96, metalness: 0 })
+const curbMaterial = new MeshStandardMaterial({ color: '#848c8b', roughness: 0.9, metalness: 0 })
+const dashGeometry = new BoxGeometry(0.34, 0.012, 0.075)
+const dashMaterial = new MeshStandardMaterial({ color: '#fff6d8', roughness: 0.8, metalness: 0 })
+const longCurbGeometry = new BoxGeometry(CELL_SIZE, 0.045, 0.1)
+const sideCurbGeometry = new BoxGeometry(0.1, 0.045, CELL_SIZE)
 
 function createRoadTile() {
   const road = new Group()
@@ -135,10 +169,24 @@ function createRoadTile() {
   asphalt.castShadow = false
   road.add(asphalt)
 
+  for (const z of [-0.95, 0.95]) {
+    const curb = new Mesh(longCurbGeometry, curbMaterial)
+    curb.position.set(0, 0.033, z)
+    curb.receiveShadow = true
+    curb.castShadow = false
+    road.add(curb)
+  }
+  for (const x of [-0.95, 0.95]) {
+    const curb = new Mesh(sideCurbGeometry, curbMaterial)
+    curb.position.set(x, 0.033, 0)
+    curb.receiveShadow = true
+    curb.castShadow = false
+    road.add(curb)
+  }
+
   for (const x of [-0.55, 0, 0.55]) {
     const dash = new Mesh(dashGeometry, dashMaterial)
-    dash.rotation.x = -Math.PI / 2
-    dash.position.set(x, 0.021, 0)
+    dash.position.set(x, 0.04, 0)
     dash.receiveShadow = true
     dash.castShadow = false
     road.add(dash)
@@ -197,9 +245,10 @@ const world = {
     roads.push(tile)
     return tile
   },
-  addBuilding(x, z) {
+  addBuilding(x, z, type = 'HOUSE') {
     if (!this.canPlaceBuilding(x, z)) return null
-    const building = createBuilding()
+    const building = createBuilding(type)
+    if (!building) return null
     building.position.set(x, 0, z)
     building.userData.cell = { x, z }
     scene.add(building)
@@ -312,27 +361,32 @@ highlight.receiveShadow = false
 scene.add(highlight)
 
 let currentMode = 'ROAD'
-const modeButton = document.querySelector('#mode-toggle')
+let selectedBuildingType = 'HOUSE'
+const toolButtons = [...document.querySelectorAll('[data-tool]')]
 
-function updateModeButton() {
-  if (!(modeButton instanceof HTMLButtonElement)) return
-  modeButton.textContent = currentMode === 'ROAD' ? 'وضع الطريق · R' : 'وضع المباني · B'
-  modeButton.setAttribute('aria-label', currentMode === 'ROAD' ? 'التبديل إلى وضع المباني' : 'التبديل إلى وضع الطريق')
-  modeButton.setAttribute('aria-pressed', String(currentMode === 'BUILDING'))
-  modeButton.dataset.mode = currentMode.toLowerCase()
+function updateToolbar() {
+  for (const button of toolButtons) {
+    const tool = button.dataset.tool
+    const active = tool === 'ROAD'
+      ? currentMode === 'ROAD'
+      : currentMode === 'BUILDING' && tool === selectedBuildingType
+    button.classList.toggle('is-active', active)
+    button.setAttribute('aria-pressed', String(active))
+    button.disabled = tool !== 'ROAD' && !spritesReady
+  }
 }
 
-function setMode(mode) {
-  currentMode = mode
-  updateModeButton()
+function setTool(tool) {
+  if (tool === 'ROAD') currentMode = 'ROAD'
+  else if (Object.hasOwn(buildingTypes, tool) && spritesReady) {
+    currentMode = 'BUILDING'
+    selectedBuildingType = tool
+  } else return
+  updateToolbar()
   updateHighlightFromScreen(lastPointerX, lastPointerY)
 }
 
-function toggleMode() {
-  setMode(currentMode === 'ROAD' ? 'BUILDING' : 'ROAD')
-}
-
-if (modeButton instanceof HTMLButtonElement) modeButton.addEventListener('click', toggleMode)
+for (const button of toolButtons) button.addEventListener('click', () => setTool(button.dataset.tool))
 
 function cellCenter(value) {
   return MathUtils.clamp(
@@ -381,7 +435,7 @@ function placeAtScreen(clientX, clientY) {
     return
   }
   if (currentMode === 'ROAD') world.addRoad(cell.x, cell.z)
-  else world.addBuilding(cell.x, cell.z)
+  else world.addBuilding(cell.x, cell.z, selectedBuildingType)
   updateHighlightFromScreen(clientX, clientY)
 }
 
@@ -479,8 +533,10 @@ canvas.addEventListener('wheel', event => {
 
 window.addEventListener('keydown', event => {
   const key = event.key.toLowerCase()
-  if (key === 'r') setMode('ROAD')
-  else if (key === 'b') setMode('BUILDING')
+  if (key === 'r') setTool('ROAD')
+  else if (key === 'b' || key === 'h') setTool('HOUSE')
+  else if (key === 's') setTool('SHOP')
+  else if (key === 'k') setTool('SKYSCRAPER')
 })
 
 function projectCellToScreen(x, z) {
@@ -492,17 +548,30 @@ function projectCellToScreen(x, z) {
   }
 }
 
-updateModeButton()
+updateToolbar()
 resizeCamera()
 updateHighlightFromScreen(lastPointerX, lastPointerY)
 
-function frame() {
+function sortBuildingSprites() {
+  camera.updateMatrixWorld(true)
+  const screenPositions = buildings.map(building => {
+    const projected = new Vector3(building.position.x, 0, building.position.z).project(camera)
+    return { building, screenY: (1 - projected.y) * 0.5 }
+  }).sort((a, b) => a.screenY - b.screenY)
+
+  screenPositions.forEach(({ building }, index) => {
+    building.renderOrder = 10 + index
+  })
+}
+
+function animate() {
   resizeCamera()
   updateCameraInertia()
+  sortBuildingSprites()
   renderer.render(scene, camera)
-  requestAnimationFrame(frame)
+  requestAnimationFrame(animate)
 }
-requestAnimationFrame(frame)
+requestAnimationFrame(animate)
 
 window.__game = {
   world,
@@ -510,8 +579,12 @@ window.__game = {
   renderer,
   createBuilding,
   createRoadTile,
+  get spritesReady() { return spritesReady },
+  get selectedBuildingType() { return selectedBuildingType },
   get currentMode() { return currentMode },
-  setMode,
+  setTool,
+  zoomCameraByFactor,
   projectCellToScreen,
+  sortBuildingSprites,
   cameraBounds: { min: -LAST_CELL_CENTER, max: LAST_CELL_CENTER },
 }
